@@ -340,6 +340,336 @@ create or replace view Manager_Branch_Data as
 ************* chapter 2 *****************************
 ---------------------------------------------------*/
 
+/*
+a- Create a sequence called ID_generator to be used for Account ID.
+Start with 1111
+Generate only odd numbers for security
+Cache 50 numbers at a time
+*/
+create sequence ID_generator 
+    START WITH     1111
+    INCREMENT BY   2
+    cache 50;
+
+/*b- Create a sequence to be used for the Transaction ID. (Make your own assumption).*/
+create sequence ID_Transaction 
+    START WITH      0
+    INCREMENT BY    1
+    cache           1000
+    minvalue        0
+    maxvalue        9999999999
+    cycle;
+
+/*---------------------------------------------------
+************* chapter 3 *****************************
+---------------------------------------------------*/
+set serveroutput on;
+
+DROP TABLE Transaction_Log;
+
+create table Transaction_Log(
+    transferamount      number,
+    sendingaccount      char(10),
+    recievingaccount    char(10),
+    tranactiondatetime  timestamp(6)
+);
+
+create or replace procedure transfer_coins(V_amount number, v_send char, v_recieve char)
+AS
+    v_transferamount      number;
+    v_sendingaccount      char(10);
+    v_recievingaccount    char(10);
+    v_tranactiondatetime  timestamp(6);
+    v_fee                 number;    
+    V_temp_num            number;
+
+   BEGIN
+    if substr(v_send, 0,2) = 'CCR' then
+        select balance into v_transferamount from credit_account
+        WHERE  CREDITACCTNO = v_send;
+        
+        if v_transferamount < V_amount then
+            RAISE_APPLICATION_ERROR(-20031, 'ACCOUNT: ' || v_send || ' DOES NOT HAVE SUFFICENT FUNDS');
+        else
+            UPDATE CREDIT_ACCOUNT CA
+                SET CA.BALANCE = CA.BALANCE - V_amount
+                WHERE CA.CREDITACCTNO = V_SEND;
+        END IF;
+    else
+        select DA.balance, DAP.TRANSFEE into v_temp_num, V_FEE
+        from deposit_acct DA
+        LEFT JOIN DEPOSIT_ACCT_PRODUCT DAP
+        ON DA.ACCTPRODID = DAP.ACCTPRODID
+        WHERE ACCTNO = v_send;
+        
+        v_transferamount:= v_temp_num + V_FEE;
+        
+        if v_temp_num < V_amount then
+            RAISE_APPLICATION_ERROR(-20031, 'ACCOUNT: ' || v_send || ' DOES NOT HAVE SUFFICENT FUNDS');
+        else
+            UPDATE DEPOSIT_ACCT DA
+                SET DA.BALANCE = DA.BALANCE - V_amount
+                WHERE DA.ACCTNO = V_SEND;
+        END IF;
+    end if;
+
+          if substr(V_RECIEVE, 0,2) = 'CCR' then
+            UPDATE CREDIT_ACCOUNT CA
+                SET CA.BALANCE = CA.BALANCE + V_amount
+                WHERE CA.CREDITACCTNO = V_RECIEVE;
+          else
+            UPDATE DEPOSIT_ACCT dA
+                SET DA.BALANCE = DA.BALANCE + V_amount
+                WHERE DA.ACCTNO = V_RECIEVE;
+          end if;
+          
+          INSERT INTO Transaction_Log(
+                transferamount,
+                sendingaccount,
+                recievingaccount,
+                tranactiondatetime
+          ) VALUES (
+                V_amount,
+                V_SEND,
+                v_RECIEVE,
+                CURRENT_TIMESTAMP
+          );
+    
+    EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        DBMS_OUTPUT.PUT_LINE('ONE OF THE ACCOUNTS IS NOT VALID');
+   END;
+/
+
+EXEC transfer_coins(50, 'CDEP000002', 'CDEP000001');
+
+SELECT * FROM Transaction_Log;
+select * from DEPOSIT_ACCt; 
+
+/************************************************************************************/
+DROP TABLE B_C_File;
+CREATE TABLE B_C_File(
+    F_NAME  VARCHAR2(512),
+    L_NAME  VARCHAR2(512),
+    ADDRESS VARCHAR2(512),
+    B_DATE  DATE
+);
+
+create or replace PROCEDURE Birthday_sub (
+    CURR_DAY IN DATE DEFAULT SYSDATE
+)
+AS
+    V_FNAME    VARCHAR2(512);
+    V_LNAME    VARCHAR2(512);
+    V_ADDRESS  VARCHAR2(512);
+    V_DOB      DATE;
+    
+    CURSOR C_CUSTOMER IS
+    SELECT 
+    FNAME,
+    LNAME, 
+    STREET || ' ' || CITY || ', ' || ZIP ,
+    DOB
+    FROM BANK_CUSTOMER;
+    
+BEGIN
+
+Open C_CUSTOMER;
+
+    LOOP 
+    
+    FETCH C_CUSTOMER 
+    INTO V_FNAME, V_LNAME, V_ADDRESS, V_DOB;
+    EXIT WHEN C_CUSTOMER%NOTFOUND;    
+    
+    IF mod(months_between(to_date(sysdate),V_DOB),12)>=11.5 OR  mod(months_between(to_date(sysdate-15),V_DOB),12)>=11.5 THEN
+        insert into B_C_File
+        values(V_FNAME, V_LNAME, V_ADDRESS, V_DOB);
+        DBMS_OUTPUT.PUT_LINE(V_FNAME || ' ' || V_LNAME || ' living at ' || V_ADDRESS || ' was added to the table ');
+    END IF;
+    
+    END LOOP;
+    
+CLOSE  C_CUSTOMER;
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        DBMS_OUTPUT.PUT_LINE('NO CUSTOMERS HAVE BIRTHDAY NEAR THIS DATE');
+        CLOSE  C_CUSTOMER;
+    when INVALID_CURSOR then
+        DBMS_OUTPUT.PUT_LINE('CURSOR IS INVALID');
+ END Birthday_sub;
+/
+
+SELECT *
+FROM BANK_CUSTOMER;
+
+INSERT INTO BANK_CUSTOMER
+values
+(
+9900000005,
+555887725,
+'Jimbo',
+'Chang',
+'Estavez',
+to_date('04-20-1993','mm-dd-yyyy'),
+'19 Grogan',
+'Quincy',
+'MA',
+02109,
+6034344444,
+null,
+2223456781,
+'vnai12*',
+'(1i291n^&',
+'aovin201',
+null
+);
+
+update BANK_CUSTOMER
+set dob =to_date('05-01-1993','mm-dd-yyyy')
+where custid=9900000004;
+
+SELECT *
+FROM B_C_File;
+
+EXEC Birthday_sub;
+
+/************************************************************************************/
+create table Today_Transaction
+(
+    date_time           timestamp,
+    accountnum          char(10),
+    accounttype         varchar2(64),
+    amount              number,
+    depoist_withdraw    varchar2(16)
+);
+
+create or replace procedure Get_Today_Transaction(
+    V_Date IN DATE DEFAULT SYSDATE    
+)
+as
+    V_dt            timestamp;
+    v_accountnum    char(10);
+    v_type          varchar2(64);
+    v_amount        number;
+    
+    cursor C_withdraw is
+    select 
+    creditacctno,
+    transtype,
+    transdatetime,
+    amount
+    from credit_acct_transaction
+    where to_char(transdatetime, 'mm-dd-yyyy') = to_char(sysdate, 'mm-dd-yyyy');
+    
+    cursor C_deposit is
+    select 
+    acctno,
+    transtype,
+    transdatetime,
+    amount
+    from deposit_acct_transaction
+    where to_char(transdatetime, 'mm-dd-yyyy') = to_char(sysdate, 'mm-dd-yyyy');
+    
+begin
+
+Open C_withdraw;
+
+    LOOP 
+    
+        FETCH C_withdraw 
+        INTO v_accountnum, v_type, V_dt, v_amount;
+        EXIT WHEN C_withdraw%NOTFOUND;   
+        
+        IF UPPER(v_type) = 'CREDIT' THEN
+            insert into Today_Transaction
+            values(
+               V_dt,
+               v_accountnum,
+               v_type,
+               v_amount,
+               'withdrawl'
+            );
+        ELSE
+            insert into Today_Transaction
+            values(
+               V_dt,
+               v_accountnum,
+               v_type,
+               v_amount,
+               'withdrawl'
+            );
+        END IF;
+
+    END LOOP;
+    
+CLOSE  C_withdraw;
+
+Open C_deposit;
+
+    LOOP 
+    
+        FETCH C_deposit 
+        INTO v_accountnum, v_type, V_dt, v_amount;
+        EXIT WHEN C_deposit%NOTFOUND;   
+        
+        IF UPPER(v_type) = 'CREDIT' THEN
+            insert into Today_Transaction
+            values(
+               V_dt,
+               v_accountnum,
+               v_type,
+               v_amount,
+               'deposit'
+            );
+        ELSE
+            insert into Today_Transaction
+            values(
+               V_dt,
+               v_accountnum,
+               v_type,
+               v_amount,
+               'deposit'
+            );
+        END IF;
+
+    END LOOP;
+    
+CLOSE  C_deposit;
+
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        DBMS_OUTPUT.PUT_LINE('NO TRANSACTIONS FOUND');
+end;
+/
+
+exec Get_Today_Transaction;
+
+select * from Today_Transaction;
+
+/************************************************************************************/
+
+create or replace function CustomerInfo(v_custnum char)
+as 
+
+    v_total number;
+    
+begin
+
+    select 
+end;
+/
+
+/************************************************************************************/
+
+select * from credit_acct_transaction;
+where to_char(transdatetime, 'mm-dd-yyyy') = to_char(sysdate, 'mm-dd-yyyy');
+
+insert into credit_acct_transaction
+values(7,'CCR0000005', 'Debit', current_timestamp, 60.49, 'Steam');
+
+select * from deposit_acct_transaction cp;
+where to_char(transdatetime, 'mm-dd-yyyy') = to_char(sysdate, 'mm-dd-yyyy');
 
 
     select * from cd_account;
