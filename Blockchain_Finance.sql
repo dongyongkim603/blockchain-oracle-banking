@@ -235,6 +235,118 @@ create or replace view Statistics_by_Branch as
     
 /*---------------------------------------------------*/
 
+create or replace view Customer_Loan_Data as
+    select 
+    bc.Fname || ' ' || bc.lname as "customer name",
+    bc.custid as "customer id",
+    l.amtborrowed as "amount borrowed",
+    trunc(((sysdate - l.dateissued)/365), 2) as "age of loan in years",
+    lp.descrip || ' ' || lp.category as "type of loan",
+    l.mopaydueday || 'th' as "Monthly payment date",
+    trunc(((lp.duration * ((l.amtborrowed/100)/lp.intrate))),2) as "total intrest on loan"
+    from bank_customer bc
+    left join loan l
+    on l.primary = bc.custid
+    left join loan_product lp
+    on l.loanprodid = lp.loanprodid;
+    
+    select * from Customer_Loan_Data;
+
+/*---------------------------------------------------*/
+
+create or replace view Customer_CD_Data as
+    select 
+    bc.Fname || ' ' || bc.lname as "customer name",
+    bc.custid as "customer id",
+    nvl(cp.descrip, 'no discription availible') as "CD description",
+    trunc((sysdate - ca.dateopened)/365,2) as "age of CD years",
+    cp.intrate as "cd intrest rate",
+    (((ca.cdamt/100) * cp.intrate) * (trunc(((sysdate - ca.dateopened)/365),2))) as "total accured intrest"  
+    
+    from bank_customer bc
+    left join cd_account ca
+    on bc.custid = ca.primary
+    left join cd_product cp
+    on ca.cdprodid = cp.cdprodid
+    where ca.cdno is not null
+    and cp.duration < trunc((sysdate - ca.dateopened)/365*12,2);
+
+    select * from Customer_CD_Data;
+
+/*---------------------------------------------------*/
+
+create or replace view Manager_Data as
+    select 
+    be.fname || ' ' || be.lname as "manager name",
+    br.b_name as "branch managing",
+    bm.empid,
+    (select count(*) from bank_employee bep
+    where bep.staffmanager = bm.empid) as "number of employees",
+    trunc((sysdate - bm.assigndate)/265,2) as "years as manager",
+    (select sum(ead.salary) 
+    from emp_annual_data ead 
+    where ead.empid = be.empid) as "employee overhead"
+    from BANK_EMPLOYEE be
+    left join branch_manager bm
+    on be.empid = bm.empid
+    left join branch br
+    on bm.branchid = br.branchid
+    where be.empid = bm.empid;
+    
+    select * from Manager_Data;
+
+/*---------------------------------------------------*/
+
+create or replace view Manager_Branch_Data as
+    select 
+    be.fname || ' ' || be.lname as "manager name",
+    br.b_name as "branch managing",
+    bm.empid,
+    
+    nvl((select sum(dt.amount)
+    from deposit_acct_transaction dt
+    where dt.accessptid = bap.accesspointid), 0) as "total deposited at bm branch",
+    
+     nvl((select atm.purchprice 
+    from atm atm
+    where atm.atmid = bap.atmid),0) as "cost of atm at branch",
+    
+    (select atm.purchdate 
+    from atm atm
+    where atm.atmid = bap.atmid) as "date atm was purchased",
+    
+    (select count(*) 
+    from car c
+    where c.branchid = bm.branchid) as "number of cars at branch",
+    
+    nvl((select sum(c.purchprice) 
+    from car c
+    where c.branchid = bm.branchid),0) as "cost of cars at branch"
+    
+    from branch_manager bm
+    left join bank_employee be
+    on be.empid = bm.empid
+    left join branch_access_points bap 
+    on bm.branchid = bap.branchid
+    inner join branch br
+    on bm.branchid = br.branchid;
+    
+    select * from Manager_Branch_Data;
+
+/*---------------------------------------------------*/
+
+
+/*---------------------------------------------------
+************* chapter 2 *****************************
+---------------------------------------------------*/
+
+
+
+    select * from cd_account;
+    select * from cd_product;
+    
+    select * from loan;
+    select * from loan_product;
     select * from EMP_ANNUAL_DATA;
     select * from bank_employee;
     select * from branch_employee;
