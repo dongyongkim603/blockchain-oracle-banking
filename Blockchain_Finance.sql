@@ -805,14 +805,31 @@ end;
 exec Last_Ten_Transaction(9900000001);
     
 /************************************************************************************/
-create or replace procedure(V_cust number)
+create or replace procedure P_Customer_Loan(V_cust number)
 as
+    V_Customer_name     varchar2(512);
+    V_Lno               varchar2(512);
+    V_amount            number;
 
-
+    cursor C_CustLoan is
+    select "customer name", loanno, "amount borrowed"
+    from Customer_Loan_Data
+    where "customer id" = V_cust;
+    
 BEGIN
-        select *
-        from Customer_Loan_Data
-        where "customer id" = V_cust;
+    Open C_CustLoan;
+
+        LOOP 
+        
+            FETCH C_CustLoan 
+            INTO V_Customer_name, V_Lno, V_amount;
+            EXIT WHEN C_CustLoan%NOTFOUND;
+            
+            DBMS_OUTPUT.PUT_LINE(V_Customer_name || ' ' || V_Lno || ' ' || V_amount);
+            
+       END LOOP;
+    
+    CLOSE  C_CustLoan;       
         
     EXCEPTION
     WHEN NO_DATA_FOUND THEN
@@ -823,7 +840,74 @@ BEGIN
 end;
 /
 
+exec P_Customer_Loan(9900000001);
+
+select "customer name", loanno, "amount borrowed" from Customer_Loan_Data;
+
 /************************************************************************************/
+drop table Emp_list;
+create table Emp_list
+(
+    full_name       varchar2(512),
+    address         varchar2(512),
+    b_date          date,
+    payrate         number
+);
+
+create or replace procedure Old_employees
+as
+
+    cursor C_emp is
+    select 
+    be.fname || ' ' || be.mname || ' ' || be.lname,
+    be.street || ' ' || be.city || ', ' || be.state,
+    be.dob,
+    (select ead.salary
+    from emp_annual_data ead
+    where ead.empid = be.empid
+    and rownum = 1 and ead.year = (select max(e.year)
+                                    from emp_annual_data e))
+    from bank_employee be;
+    
+    V_name          varchar2(512);
+    v_address       varchar2(512);
+    v_dob           date;
+    v_pay           number;
+    v_temp          number;
+    
+Begin
+    Open C_emp;
+
+        LOOP 
+        
+            FETCH C_emp 
+            INTO V_name, v_address, v_dob, v_pay;
+            v_temp:=TRUNC(MONTHS_BETWEEN(SYSDATE, v_dob))/12;
+            EXIT WHEN C_emp%NOTFOUND;
+            
+            if  v_temp > 30 then
+                insert into Emp_list
+                values(V_name, v_address, v_dob, v_pay);
+            end if;
+            
+       END LOOP;
+    
+    CLOSE  C_emp;       
+        
+    EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        DBMS_OUTPUT.PUT_LINE('NO employees found FOUND');
+    IF SQL%NOTFOUND THEN
+        DBMS_OUTPUT.PUT_LINE('no records found');
+    end if;
+end;
+/
+
+exec Old_employees;
+
+/*---------------------------------------------------
+************* chapter 4 *****************************
+---------------------------------------------------*/
 
 select * from credit_acct_transaction;
 select * from deposit_acct_transaction cp;
