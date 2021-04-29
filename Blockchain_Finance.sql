@@ -237,8 +237,9 @@ create or replace view Statistics_by_Branch as
 
 create or replace view Customer_Loan_Data as
     select 
-    bc.Fname || ' ' || bc.lname as "customer name",
+    bc.Fname || ' ' || bc.mname || ' ' || bc.lname as "customer name",
     bc.custid as "customer id",
+    l.loanno,
     l.amtborrowed as "amount borrowed",
     trunc(((sysdate - l.dateissued)/365), 2) as "age of loan in years",
     lp.descrip || ' ' || lp.category as "type of loan",
@@ -650,27 +651,182 @@ select * from Today_Transaction;
 /************************************************************************************/
 
 create or replace function CustomerInfo(v_custnum char)
-as 
+return number
+is 
+    v_total number;
+    
+begin
+   select nvl(da.balance,0) into v_total
+    from bank_customer bc
+    left join deposit_acct da
+    on bc.custid = da.primary
+    where bc.custid = v_custnum;
+    
+    return v_total;
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        DBMS_OUTPUT.PUT_LINE('NO TRANSACTIONS FOUND');
+        return null;
+    IF SQL%NOTFOUND THEN
+        DBMS_OUTPUT.PUT_LINE('no record found for ' || v_custnum);
+        return null;
+    end if;
+end;
+/
 
+select CustomerInfo(9900000001) from dual;
+
+/************************************************************************************/
+
+create or replace function CustomerInfo(v_custnum number, v_date date)
+return number
+is 
     v_total number;
     
 begin
 
+    select nvl(sum(dat.amount),0) into v_total
+    from bank_customer bc
+    left join deposit_acct da
+    on bc.custid = da.primary
+    left join deposit_acct_transaction dat
+    on da.acctno = dat.acctno
+    where bc.custid = v_custnum 
+    and to_char(transdatetime, 'mm-dd-yyyy') = to_char(v_date, 'mm-dd-yyyy') ;
+    
+    return v_total;
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        DBMS_OUTPUT.PUT_LINE('NO TRANSACTIONS FOUND');
+        return null;
+    IF SQL%NOTFOUND THEN
+        DBMS_OUTPUT.PUT_LINE('no record found for ' || v_custnum);
+        return null;
+    end if;
+end;
+/
+
+select CustomerInfo(9900000001, '02-DEC-19') from dual;
+
+/************************************************************************************/
+
+create or replace function CustomerInfo(v_custnum number, v_date date, v_coowner number)
+return number
+is 
+    v_total number;
+begin
+
+   select nvl(sum(dat.amount),0) into v_total
+    from bank_customer bc
+    left join deposit_acct da
+    on bc.custid = da.primary
+    left join deposit_acct_transaction dat
+    on da.acctno = dat.acctno
+    where bc.custid = v_custnum
+    and da.coowner = v_coowner
+    and to_char(transdatetime, 'mm-dd-yyyy') = to_char(v_date, 'mm-dd-yyyy');
+    
+    return v_total;
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        DBMS_OUTPUT.PUT_LINE('NO TRANSACTIONS FOUND');
+        return null;
+    IF SQL%NOTFOUND THEN
+        DBMS_OUTPUT.PUT_LINE('no record found for ' || v_custnum);
+        return null;
+    end if;
+end;
+/
+
+select CustomerInfo(9900000001, '02-DEC-19', 9900000003) from dual;
+
+/************************************************************************************/
+
+create or replace procedure Last_Ten_Transaction(V_Cust number)
+as
+
+    cursor C_transactions is
     select 
+    dat.transtype,
+    dat.transdatetime,
+    dat.amount
+    from bank_customer bc
+    left join deposit_acct da
+    on bc.custid = da.primary
+    left join deposit_acct_transaction dat
+    on da.acctno = dat.acctno
+    where bc.custid = V_Cust
+    
+    union
+    
+    select 
+    cat.transtype,
+    cat.transdatetime,
+    cat.amount
+    from bank_customer bc
+    left join credit_account da
+    on bc.custid = da.primary
+    left join credit_acct_transaction cat
+    on da.creditacctno = cat.creditacctno
+    where bc.custid = V_Cust;
+
+    V_counter       number;
+    V_type          varchar2(16);
+    v_transdatetime timestamp;
+    V_amount        number;
+    
+begin
+    
+    Open C_transactions;
+
+    LOOP 
+    
+        FETCH C_transactions 
+        INTO V_type, v_transdatetime, V_amount;
+        EXIT WHEN C_transactions%NOTFOUND or V_counter = 10;
+        
+        DBMS_OUTPUT.PUT_LINE(V_type || ' '  || v_transdatetime || ' ' || V_amount);
+        
+        V_counter:= V_counter + 1;
+        
+   END LOOP;
+    
+CLOSE  C_transactions;       
+        
+    EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        DBMS_OUTPUT.PUT_LINE('NO TRANSACTIONS FOUND');
+    IF SQL%NOTFOUND THEN
+        DBMS_OUTPUT.PUT_LINE('no record found for ' || v_cust);
+    end if;
+end;
+/
+
+exec Last_Ten_Transaction(9900000001);
+    
+/************************************************************************************/
+create or replace procedure(V_cust number)
+as
+
+
+BEGIN
+        select *
+        from Customer_Loan_Data
+        where "customer id" = V_cust;
+        
+    EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        DBMS_OUTPUT.PUT_LINE('NO TRANSACTIONS FOUND');
+    IF SQL%NOTFOUND THEN
+        DBMS_OUTPUT.PUT_LINE('no record found for ' || v_cust);
+    end if;
 end;
 /
 
 /************************************************************************************/
 
 select * from credit_acct_transaction;
-where to_char(transdatetime, 'mm-dd-yyyy') = to_char(sysdate, 'mm-dd-yyyy');
-
-insert into credit_acct_transaction
-values(7,'CCR0000005', 'Debit', current_timestamp, 60.49, 'Steam');
-
 select * from deposit_acct_transaction cp;
-where to_char(transdatetime, 'mm-dd-yyyy') = to_char(sysdate, 'mm-dd-yyyy');
-
 
     select * from cd_account;
     select * from cd_product;
