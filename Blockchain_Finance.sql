@@ -909,6 +909,66 @@ exec Old_employees;
 ************* chapter 4 *****************************
 ---------------------------------------------------*/
 
+create or replace package BankP is
+
+function current_balance(V_id varchar2, V_type varchar2) return number;
+
+function Last_checking_deposit(V_acct_num char) return deposit_acct_transaction%rowtype;
+
+end Pak_StateEmployee;
+/
+
+----------------------------------------------------------------
+
+create or replace package body BankP is
+
+function current_balance(V_id varchar2, v_type varchar2) return number
+is
+    V_total     number;
+begin
+    
+    if upper(v_type) = upper('credit') then
+        select balance into v_total
+        from credit_account;
+    elsif upper(v_type) = upper('deposit') then
+        select balance into v_total
+        from DEPOSIT_ACCt;
+    else
+        RAISE_APPLICATION_ERROR(-20231, v_type || ' is an invalid account type');
+        return null;
+    end if;
+    
+    return v_total
+
+EXCEPTION
+    WHEN	 VALUE_ERROR THEN					
+        DBMS_OUTPUT.PUT_LINE('Error '||SQLCODE||
+        SUBSTR(SQLERRM,1,80));  
+    WHEN ZERO_DIVIDE THEN
+        DBMS_OUTPUT.PUT_LINE('Divide by zero');
+    WHEN OTHERS THEN
+    IF SQL%NOTFOUND THEN
+        DBMS_OUTPUT.PUT_LINE('No such record was found');
+    END IF;
+        DBMS_OUTPUT.PUT_LINE('Error '||SQLCODE || 
+        SUBSTR(SQLERRM,1,80));  
+end current_balance;
+
+function Last_checking_deposit(V_acct_num char) return deposit_acct_transaction%rowtype
+is
+
+    V_last      deposit_acct_transaction%rowtype;
+
+begin
+
+
+end Last_checking_deposit;
+
+end BankP;
+/
+
+/*****************************************************************/
+
 select * from credit_acct_transaction;
 select * from deposit_acct_transaction cp;
 
