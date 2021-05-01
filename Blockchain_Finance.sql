@@ -1244,6 +1244,7 @@ exec BranchP.branch_employees(1001);
 /*---------------------------------------------------
 ************* chapter 4.C *****************************
 ---------------------------------------------------*/
+
 create or replace package Insert_pkg  is
     procedure P_insert_customer(
         V_ssn    in   char,
@@ -1304,6 +1305,13 @@ create or replace package Insert_pkg  is
         
         procedure delete_driver(
             v_id    in  number
+        );
+        
+        PROCEDURE UPDATE_DRIVER(
+            v_ID    IN  NUMBER,
+            V_LNO   IN VARCHAR2,
+            V_STATE IN CHAR,
+            V_EXP   IN DATE
         );
             
 end Insert_pkg ;
@@ -1448,12 +1456,14 @@ begin
             v_ID    IN  NUMBER,
             V_LNO   IN VARCHAR2,
             V_STATE IN CHAR,
-            V_EXP   IN DATE
-        )
+            V_EXP   IN DATE)
   IS
     V_EMP       NUMBER;
   BEGIN
-v
+    SELECT EMPID INTO V_EMP
+      FROM BANK_EMPLOYEE
+      WHERE empid = v_ID;
+  IF V_EMP IS NOT NULL THEN
         INSERT INTO driver
         VALUES(
             V_ID,
@@ -1468,17 +1478,44 @@ v
           dbms_output.put_line('duplicate values cannot be insert:');
   end INSERT_DRIVER;
 ---------------------------------------------------
-    procedure delete_driver(
-            v_id    in  number
-        )
+    procedure delete_driver(v_id in number)
     is
-    v_emp   number;
+        v_emp   number;
     begin
       SELECT EMPID INTO V_EMP
       FROM driver
       WHERE empid = v_ID;
     IF V_EMP IS NOT NULL THEN
-        delete from driver
+        delete 
+        from driver
+        where empid=v_id;
+    else
+        RAISE_APPLICATION_ERROR(-20535, 'NO EMPLOYEE FOUND WITH ID: ' || v_ID);
+    end if;
+EXCEPTION 
+   WHEN ZERO_DIVIDE THEN  
+      dbms_output.put_line('MATHMATICAL ERROR');
+   WHEN OTHERS THEN  
+      dbms_output.put_line('Some other kind of error occurred when deleting');
+END delete_driver;
+----------------------------------------------------
+ PROCEDURE UPDATE_DRIVER(
+            v_ID    IN  NUMBER,
+            V_LNO   IN VARCHAR2,
+            V_STATE IN CHAR,
+            V_EXP   IN DATE)
+IS
+    V_DRIVER    DRIVER%ROWTYPE;
+BEGIN
+      SELECT * INTO V_DRIVER
+      FROM driver
+      WHERE empid = v_ID;
+    IF V_DRIVER.EMPID IS NOT NULL THEN
+        UPDATE driver
+        SET 
+            LICENSENO = v_LNO,
+            STATEOFISSUE = V_STATE,
+            EXPDATE = V_EXP
         where empid=v_id;
     else
         RAISE_APPLICATION_ERROR(-20535, 'NO EMPLOYEE FOUND WITH ID: ' || v_ID);
@@ -1486,9 +1523,9 @@ v
     EXCEPTION 
    WHEN ZERO_DIVIDE THEN  
       dbms_output.put_line('MATHMATICAL ERROR');
-
    WHEN OTHERS THEN  
       dbms_output.put_line('Some other kind of error occurred when deleting');
+END UPDATE_DRIVER;
 
 end Insert_pkg ;
 /
@@ -1499,20 +1536,425 @@ exec Insert_pkg.P_insert_customer(008293564,'Jorge','Xi','Usman', to_date('06-20
 exec Insert_pkg.P_insert_employee(003001234,'chuck','theiceman','liddel','venturas ave','Las Vegas','nv','67238',9876451726,'ice@gmail.com','m','w',to_date('06-20-1969','mm-dd-yyyy'),'susan','liddel','bach',to_date('06-20-1989','mm-dd-yyyy'),to_date('06-20-1999','mm-dd-yyyy'),'security',1000000002);
 EXEC Insert_pkg.insert_into_cd('CCD0000004', 'CD3', '9900000003', '9900000001',4500);
 EXEC Insert_pkg.INSERT_DRIVER(1000000009, 'NH41LN021', 'NH', '04-APR-22');
+EXEC Insert_pkg.delete_driver(1000000009);
+EXEC Insert_pkg.UPDATE_DRIVER(1000000009, 'MA000291', 'MA', '21-DEC-34');
 
+/*---------------------------------------------------
+************* chapter 4.C *****************************
+---------------------------------------------------*/
+
+create or replace package USER_pkg  is
+    PROCEDURE GIVE_RAISE(V_EMPID IN NUMBER, V_RAISE NUMBER);
+    PROCEDURE PROMOTE_MANAGER(V_EMPID IN NUMBER, V_BRANCH IN NUMBER);
+    PROCEDURE REMOVE_CUSTOMER_ACCOUNTS(V_PRIM IN NUMBER);
+end USER_pkg ;
+/
+--------------------------------------------
+create or replace package BODY USER_pkg  is
+PROCEDURE GIVE_RAISE(V_EMPID IN NUMBER, V_RAISE NUMBER)
+IS
+    V_TEMP  NUMBER;
+BEGIN
+    SELECT EMPID INTO V_TEMP
+    FROM BANK_EMPLOYEE
+    WHERE V_EMPID = EMPID;
+    IF V_RAISE < 0 THEN
+        RAISE_APPLICATION_ERROR(-20635, 'RAISE AMOUNT MUST BE GREATER THAN 0: ' || V_RAISE);
+    end if;
+    IF V_TEMP IS NOT NULL THEN
+        UPDATE EMP_ANNUAL_DATA
+        SET 
+            SALARY = SALARY + V_RAISE,
+            YEAR = to_char(sysdate, 'YYYY')
+        where empid=V_EMPID;
+    else
+        RAISE_APPLICATION_ERROR(-20535, 'NO EMPLOYEE FOUND WITH ID: ' || V_EMPID);
+    end if;
+EXCEPTION 
+   WHEN ZERO_DIVIDE THEN  
+      dbms_output.put_line('MATHMATICAL ERROR');
+   WHEN OTHERS THEN  
+      dbms_output.put_line('Some other kind of error occurred when deleting');
+END GIVE_RAISE;
+------------------------------------------------
+PROCEDURE PROMOTE_MANAGER(V_EMPID IN NUMBER, V_BRANCH IN NUMBER)
+IS
+    V_TEMPM  NUMBER;
+    V_TEMPE  NUMBER;
+BEGIN
+    SELECT EMPID INTO V_TEMPE
+    FROM BANK_EMPLOYEE
+    WHERE EMPID = V_EMPID;
+    
+    IF V_TEMPE IS NULL THEN
+        RAISE_APPLICATION_ERROR(-20535, 'NO EMPLOYEE FOUND WITH ID: ' || V_EMPID);
+    end if;
+    
+    dbms_output.put_line('INSERT BEFORE');
+    INSERT INTO BRANCH_MANAGER
+    VALUES(V_BRANCH,
+            V_EMPID,
+            TO_CHAR(SYSDATE, 'DD-MON-YY'));
+    dbms_output.put_line('INSERT AFTER');       
+    UPDATE BANK_EMPLOYEE
+    SET 
+        STAFFMANAGER = NULL
+    WHERE EMPID = V_EMPID;
+    dbms_output.put_line('UPDATE AFTER');
+
+EXCEPTION 
+   WHEN ZERO_DIVIDE THEN  
+      dbms_output.put_line('MATHMATICAL ERROR');
+   WHEN OTHERS THEN  
+      dbms_output.put_line('Some other kind of error occurred');
+END PROMOTE_MANAGER;
+---------------------------------------------------
+PROCEDURE REMOVE_CUSTOMER_ACCOUNTS(V_PRIM IN NUMBER)
+IS
+    V_TEMP NUMBER;
+BEGIN
+    SELECT BC.CUSTID INTO V_TEMP
+    FROM BANK_CUSTOMER BC
+    WHERE BC.CUSTID = V_PRIM;
+    
+    IF V_PRIM IS NULL THEN 
+        RAISE_APPLICATION_ERROR(-20535, 'NO EMPLOYEE FOUND WITH ID: ' || V_PRIM);
+    ELSE
+        DELETE FROM CREDIT_ACCOUNT CA
+        WHERE CA.PRIMARY = V_PRIM;
+        
+        DELETE FROM DEPOSIT_ACCT DA
+        WHERE DA.PRIMARY = V_PRIM;
+        
+        DELETE FROM CD_ACCOUNT CD
+        WHERE CD.PRIMARY = V_PRIM;
+        
+        DELETE FROM BANK_CUSTOMER BC
+        WHERE BC.CUSTID = V_PRIM;
+    END IF;
+EXCEPTION 
+   WHEN ZERO_DIVIDE THEN  
+      dbms_output.put_line('MATHMATICAL ERROR');
+   WHEN OTHERS THEN  
+      dbms_output.put_line('Some other kind of error occurred');    
+END REMOVE_CUSTOMER_ACCOUNTS;
+end USER_pkg ;
+/
+
+EXEC USER_pkg.GIVE_RAISE(1000000009, 20000);
+EXEC USER_pkg.PROMOTE_MANAGER(1000000006, 1003);
+EXEC USER_pkg.REMOVE_CUSTOMER_ACCOUNTS(9900000001);
+
+SELECT TO_CHAR(SYSDATE, 'DD-MON-YY') FROM DUAL;
+
+/*---------------------------------------------------
+************* chapter 5 *****************************
+---------------------------------------------------*/
+
+create table Employee_History_file
+AS SELECT 	*
+FROM bank_employee;
+
+CREATE OR REPLACE TRIGGER removed_employee
+	after DELETE ON bank_employee
+    for each row
+DECLARE
+BEGIN
+    insert into Employee_History_file
+    values(
+        :old.empid,
+        :old.ssn,
+        :old.fname,
+        :old.mname,
+        :old.lname,
+        :old.street,
+        :old.city,
+        :old.state,
+        :old.zip,
+        :old.homePhone,
+        :old.email,
+        :old.gender,
+        :old.race,
+        :old.dob,
+        :old.spousefname,
+        :old.spouselname,
+        :old.degree,
+        :old.degreedate,
+        :old.hiredate,
+        :old.jobtitle,
+        :old.staffmanager);
+end;
+/
+
+delete from bank_employee
+where ssn = 003001234;
+
+select * from Employee_History_file;
+
+----------------- loan modification--------------------
+CREATE OR REPLACE TRIGGER mod_loan
+	AFTER DELETE or insert or update ON loan
+    for each row
+BEGIN
+   if inserting then
+        insert into customer_mod_log
+        values(
+            (select fname || ' ' || mname || ' ' || lname
+            from bank_customer
+            where custid = :new.primary),
+            sysdate,
+            'INSERT LOAN loanno:'|| :new.loanno || ' loanprodid:' || :new.loanprodid|| ' amtborrowed:' ||  to_char(:new.amtborrowed) || ' primary:' ||  to_char(:new.primary) || ' coowner:' ||  to_char(:new.coowner) || ' dateissued:' || to_char(:new.dateissued, 'dd-mon-yy') || ' minmopay:' || to_char(:new.minmopay) || ' mopaydueday:' || to_char(:new.mopaydueday)
+        );
+    elsif deleting then
+        insert into customer_mod_log
+        values(
+            (select fname || ' ' || mname || ' ' || lname
+            from bank_customer
+            where custid = :old.primary),
+            sysdate,
+            'DELETE LOAN loanno:'||:old.loanno || ' loanprodid:' || :old.loanprodid|| ' amtborrowedl:' ||  to_char(:old.amtborrowed) || ' primary:' ||  to_char(:old.primary) || ' coowner:' ||  to_char(:old.coowner) || ' dateissued:' || to_char(:old.dateissued, 'dd-mon-yy') || ' minmopay:' || to_char(:old.minmopay) || ' mopaydueday:' || to_char(:old.mopaydueday)
+        );
+    else
+        insert into customer_mod_log
+        values(
+            (select fname || ' ' || mname || ' ' || lname
+            from bank_customer
+            where custid = :old.primary),
+            sysdate,
+            'UPDATE OLD LOAN '||:old.loanno || ' ' || :old.loanprodid|| ' ' ||  to_char(:old.amtborrowed) || ' ' ||  to_char(:old.primary) || ' ' ||  to_char(:old.coowner) || ' ' || to_char(:old.dateissued, 'dd-mon-yy') || ' ' || to_char(:old.minmopay) || ' ' || to_char(:old.mopaydueday)||' UPDATE NEW LOAN loanno:'|| :new.loanno || ' loanprodid:' || :new.loanprodid|| ' amtborrowed:' ||  to_char(:new.amtborrowed) || ' primary:' ||  to_char(:new.primary) || ' coowner:' ||  to_char(:new.coowner) || ' dateissued:' || to_char(:new.dateissued, 'dd-mon-yy') || ' minmopay:' || to_char(:new.minmopay) || ' mopaydueday:' || to_char(:new.mopaydueday)
+        );
+    end if;
+end;
+/
+
+--------------- desposit ------------------------------
+CREATE OR REPLACE TRIGGER mod_deposit
+	after DELETE or insert or update ON deposit_acct
+    for each row
+BEGIN
+   if inserting then
+        insert into customer_mod_log
+        values(
+            (select fname || ' ' || mname || ' ' || lname
+            from bank_customer
+            where custid = :new.primary),
+            sysdate,
+            'INSERT DEPOSIT | ACCTNO:'|| :new.ACCTNO || ' | ACCTPRODID:' || :new.ACCTPRODID|| ' | DATEOPENED:' || TO_CHAR(:NEW.DATEOPENED, 'DD-MON-YY') || ' | INITDEPOSIT:' || TO_CHAR(:NEW.INITDEPOSIT) || ' | PRIMARY:' || TO_CHAR(:NEW.PRIMARY) || ' | COOWNER:' || TO_CHAR(:NEW.COOWNER) || ' | BALANCE:' || TO_CHAR(:NEW.BALANCE)
+            );
+    elsif deleting then
+        insert into customer_mod_log
+        values(
+            (select fname || ' ' || mname || ' ' || lname
+            from bank_customer
+            where custid = :old.primary),
+            sysdate,
+            'DELETE DEPOSIT | ACCTNO:'|| :OLD.ACCTNO || ' | ACCTPRODID:' || :OLD.ACCTPRODID|| ' | DATEOPENED:' || TO_CHAR(:OLD.DATEOPENED, 'DD-MON-YY') || ' | INITDEPOSIT:' || TO_CHAR(:OLD.INITDEPOSIT) || ' | PRIMARY:' || TO_CHAR(:OLD.PRIMARY) || ' | COOWNER:' || TO_CHAR(:OLD.COOWNER) || ' | BALANCE:' || TO_CHAR(:OLD.BALANCE)
+        );
+    else
+        insert into customer_mod_log
+        values(
+            (select fname || ' ' || mname || ' ' || lname
+            from bank_customer
+            where custid = :old.primary),
+            sysdate,
+            'UPDATE OLD DEPOSIT | ACCTNO:'|| :new.ACCTNO || ' | ACCTPRODID:' || :new.ACCTPRODID|| ' | DATEOPENED:' || TO_CHAR(:NEW.DATEOPENED, 'DD-MON-YY') || ' | INITDEPOSIT:' || TO_CHAR(:NEW.INITDEPOSIT) || ' | PRIMARY:' || TO_CHAR(:NEW.PRIMARY) || ' | COOWNER:' || TO_CHAR(:NEW.COOWNER) || ' | BALANCE:' || TO_CHAR(:NEW.BALANCE)|| ' UPDATE NEW | ACCTNO:'|| :OLD.ACCTNO || ' | ACCTPRODID:' || :OLD.ACCTPRODID|| ' | DATEOPENED:' || TO_CHAR(:OLD.DATEOPENED, 'DD-MON-YY') || ' | INITDEPOSIT:' || TO_CHAR(:OLD.INITDEPOSIT) || ' | PRIMARY:' || TO_CHAR(:OLD.PRIMARY) || ' | COOWNER:' || TO_CHAR(:OLD.COOWNER) || ' | BALANCE:' || TO_CHAR(:OLD.BALANCE)
+        );
+    end if;
+end;
+/
+
+--------------- cd account ---------------------------
+CREATE OR REPLACE TRIGGER mod_cd
+	after DELETE or insert or update ON cd_account
+    for each row
+
+BEGIN
+   if inserting then
+        insert into customer_mod_log
+        values(
+            (select fname || ' ' || mname || ' ' || lname
+            from bank_customer
+            where custid = :new.primary),
+            sysdate,
+            'INSERT CD | CDNO:'|| :new.CDNO || ' | CDPRODID:' || :new.CDPRODID|| ' | DATEOPENED:' || TO_CHAR(:NEW.DATEOPENED, 'DD-MON-YY') || ' | PRIMARY:' || TO_CHAR(:NEW.PRIMARY) || ' | COOWNER:' || TO_CHAR(:NEW.COOWNER) || ' | CDAMT:' || TO_CHAR(:NEW.CDAMT)
+            );
+    elsif deleting then
+        insert into customer_mod_log
+        values(
+            (select fname || ' ' || mname || ' ' || lname
+            from bank_customer
+            where custid = :old.primary),
+            sysdate,
+            'DELETE CD | CDNO:'|| :OLD.CDNO || ' | CDPRODID:' || :OLD.CDPRODID|| ' | DATEOPENED:' || TO_CHAR(:OLD.DATEOPENED, 'DD-MON-YY') || ' | PRIMARY:' || TO_CHAR(:OLD.PRIMARY) || ' | COOWNER:' || TO_CHAR(:OLD.COOWNER) || ' | CDAMT:' || TO_CHAR(:OLD.CDAMT)
+        );
+    else
+        insert into customer_mod_log
+        values(
+            (select fname || ' ' || mname || ' ' || lname
+            from bank_customer
+            where custid = :old.primary),
+            sysdate,
+            'UPDATE OLD CD | CDNO:'|| :new.CDNO || ' | CDPRODID:' || :new.CDPRODID|| ' | DATEOPENED:' || TO_CHAR(:NEW.DATEOPENED, 'DD-MON-YY') || ' | PRIMARY:' || TO_CHAR(:NEW.PRIMARY) || ' | COOWNER:' || TO_CHAR(:NEW.COOWNER) || ' | CDAMT:' || TO_CHAR(:NEW.CDAMT) || ' UPDATE NEW | CDNO:'|| :OLD.CDNO || ' | CDPRODID:' || :OLD.CDPRODID|| ' | DATEOPENED:' || TO_CHAR(:OLD.DATEOPENED, 'DD-MON-YY') || ' | PRIMARY:' || TO_CHAR(:OLD.PRIMARY) || ' | COOWNER:' || TO_CHAR(:OLD.COOWNER) || ' | CDAMT:' || TO_CHAR(:OLD.CDAMT)
+        );
+    end if;
+end;
+/
+
+---------------- credit --------------------------
+CREATE OR REPLACE TRIGGER mod_credit
+	after DELETE or insert or update ON credit_account
+    for each row
+BEGIN
+   if inserting then
+        insert into customer_mod_log
+        values(
+            (select fname || ' ' || mname || ' ' || lname
+            from bank_customer
+            where custid = :new.primary),
+            sysdate,
+            'INSERT CREDIT | CREDITACCTNO:'|| :new.CREDITACCTNO || ' | CREDITPRODID:' || :new.CREDITPRODID|| ' | DATEOPENED:' || TO_CHAR(:NEW.DATEOPENED, 'DD-MON-YY') || ' | PRIMARY:' || TO_CHAR(:NEW.PRIMARY) || ' | COOWNER:' || TO_CHAR(:NEW.COOWNER) || ' | BALANCE:' || TO_CHAR(:NEW.BALANCE) || ' | CURRENTLIMMIT:' || TO_CHAR(:NEW.CURRENTLIMMIT)||' | MOPAYDUEDAY:' || TO_CHAR(:NEW.MOPAYDUEDAY)
+            );
+    elsif deleting then
+        insert into customer_mod_log
+        values(
+            (select fname || ' ' || mname || ' ' || lname
+            from bank_customer
+            where custid = :old.primary),
+            sysdate,
+            'DELETE CREDIT | CREDITACCTNO:'|| :OLD.CREDITACCTNO || ' | CREDITPRODID:' || :OLD.CREDITPRODID|| ' | DATEOPENED:' || TO_CHAR(:OLD.DATEOPENED, 'DD-MON-YY') || ' | PRIMARY:' || TO_CHAR(:OLD.PRIMARY) || ' | COOWNER:' || TO_CHAR(:OLD.COOWNER) || ' | BALANCE:' || TO_CHAR(:OLD.BALANCE) || ' | CURRENTLIMMIT:' || TO_CHAR(:OLD.CURRENTLIMMIT)||' | MOPAYDUEDAY:' || TO_CHAR(:OLD.MOPAYDUEDAY)
+        );
+    else
+        insert into customer_mod_log
+        values(
+            (select fname || ' ' || mname || ' ' || lname
+            from bank_customer
+            where custid = :old.primary),
+            sysdate,
+            'UPDATE OLD CREDIT | CREDITACCTNO:'|| :new.CREDITACCTNO || ' | CREDITPRODID:' || :new.CREDITPRODID|| ' | DATEOPENED:' || TO_CHAR(:NEW.DATEOPENED, 'DD-MON-YY') || ' | PRIMARY:' || TO_CHAR(:NEW.PRIMARY) || ' | COOWNER:' || TO_CHAR(:NEW.COOWNER) || ' | BALANCE:' || TO_CHAR(:NEW.BALANCE) || ' | CURRENTLIMMIT:' || TO_CHAR(:NEW.CURRENTLIMMIT)||' | MOPAYDUEDAY:' || TO_CHAR(:NEW.MOPAYDUEDAY) || ' UPDATE NEW | CREDITACCTNO:'|| :OLD.CREDITACCTNO || ' | CREDITPRODID:' || :OLD.CREDITPRODID|| ' | DATEOPENED:' || TO_CHAR(:OLD.DATEOPENED, 'DD-MON-YY') || ' | PRIMARY:' || TO_CHAR(:OLD.PRIMARY) || ' | COOWNER:' || TO_CHAR(:OLD.COOWNER) || ' | BALANCE:' || TO_CHAR(:OLD.BALANCE) || ' | CURRENTLIMMIT:' || TO_CHAR(:OLD.CURRENTLIMMIT)||' | MOPAYDUEDATE:' || TO_CHAR(:OLD.MOPAYDUEDAY)
+        );
+    end if;
+end;
+/
+
+DROP TABLE customer_mod_log;
+create table customer_mod_log
+(
+    customer_name       varchar2(512),
+    mod_date            date,
+    mod_details         varchar2(2048)
+);
+
+INSERT INTO LOAN
+VALUES('CL0000004', 'L1', '22000', 9900000004, 9900000002, TO_CHAR(SYSDATE,'DD-MON-YY'), 300, 15);
+UPDATE LOAN
+SET AMTBORROWED = 50000
+WHERE PRIMARY =9900000004;
+DELETE FROM LOAN
+WHERE PRIMARY =9900000004;
+
+INSERT INTO DEPOSIT_ACCT
+VALUES('CDEP000003', 'IntCk', TO_CHAR(SYSDATE,'DD-MON-YY'), 6000, 9900000005, 9900000003, 6000);
+UPDATE DEPOSIT_ACCT
+SET BALANCE = 1000
+WHERE PRIMARY =9900000005;
+DELETE FROM DEPOSIT_ACCT
+WHERE PRIMARY =9900000005;
+
+INSERT INTO cd_account
+VALUES('CCD0000005', 'CD1', TO_CHAR(SYSDATE,'DD-MON-YY'), 9900000003, 9900000002, 6000);
+UPDATE cd_account
+SET CDPRODID = 'CD2'
+WHERE PRIMARY =9900000003;
+DELETE FROM cd_account
+WHERE PRIMARY =9900000003;
+
+INSERT INTO CREDIT_account
+VALUES('CCR0000004', 'Annualfee', TO_CHAR(SYSDATE,'DD-MON-YY'), 9900000002, 1211, 8000, 12000, 15);
+UPDATE CREDIT_account
+SET balance = 1000
+WHERE PRIMARY =9900000002;
+DELETE FROM CREDIT_account
+WHERE PRIMARY =9900000002;
+
+SELECT * FROM customer_mod_log;
+
+--------------------- LARGE DEPOSIT ----------------------------
+CREATE TABLE Large_Dep_Log 
+    AS
+    SELECT 	*
+    FROM		DEPOSIT_ACCT_TRANSACTION;
+
+CREATE OR REPLACE TRIGGER LARGE_DEPOSIT
+	after insert ON DEPOSIT_ACCT_TRANSACTION
+    for each row
+BEGIN
+    if :NEW.AMOUNT > 5000 and :new.description like '%deposit' THEN
+        INSERT INTO Large_Dep_Log
+        VALUES(
+            :NEW.TRANSID,
+            :NEW.ACCTNO,
+            :NEW.TRANSTYPE,
+            :NEW.TRANSDATETIME,
+            :NEW.AMOUNT,
+            :NEW.DESCRIPTION,
+            :NEW.ACCESSPTID
+        );
+    END IF;
+end;
+/
+
+INSERT INTO DEPOSIT_ACCT_TRANSACTION
+VALUES(
+    10, 'CCR0000004', 'Credit', current_timestamp, 5001, 'teller deposit', 'A000002');
+
+select * from Large_Dep_Log;
+
+--------------------- large withdrawal ----------------------------
+
+CREATE TABLE Large_With_Log 
+    AS
+    SELECT 	*
+    FROM		DEPOSIT_ACCT_TRANSACTION;
+
+CREATE OR REPLACE TRIGGER LARGE_withdrawal
+	after insert ON DEPOSIT_ACCT_TRANSACTION
+    for each row
+BEGIN
+    if :NEW.AMOUNT > 10000 and :new.description like '%withdrawal' THEN
+        INSERT INTO Large_With_Log
+        VALUES(
+            :NEW.TRANSID,
+            :NEW.ACCTNO,
+            :NEW.TRANSTYPE,
+            :NEW.TRANSDATETIME,
+            :NEW.AMOUNT,
+            :NEW.DESCRIPTION,
+            :NEW.ACCESSPTID
+        );
+    END IF;
+end;
+/
+
+INSERT INTO DEPOSIT_ACCT_TRANSACTION
+VALUES(
+    11, 'CCR0000004', 'Debit', current_timestamp, 10001, 'teller withdrawal', 'A000002');
+    
+select * from Large_With_Log;
+delete from DEPOSIT_ACCT_TRANSACTION
+where transid = 11;
 /*****************************************************************/
 
 select * from credit_acct_transaction;
 select * from deposit_acct_transaction cp;
-
+ select * from bank_customer;
     select * from cd_account;
-    select * from cd_product;
-    select * from driver;
-    
+    select * from DEPOSIT_ACCt; 
+    select * from credit_account;
+    SELECT * FROM BRANCH_MANAGER;
+    select * from bank_employee;
     select * from loan;
     select * from loan_product;
     select * from EMP_ANNUAL_DATA;
-    select * from bank_employee;
     select * from branch_employee;
     select * from CREDIT_ACCT_TRAnSACTION;
     select * from DEPOSIT_ACCT_TRANSACTION;
