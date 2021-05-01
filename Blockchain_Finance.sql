@@ -911,61 +911,594 @@ exec Old_employees;
 
 create or replace package BankP is
 
-function current_balance(V_id varchar2, V_type varchar2) return number;
+function current_balance(V_id number, V_type varchar2) return number;
 
-function Last_checking_deposit(V_acct_num char) return deposit_acct_transaction%rowtype;
+function Last_checking_deposit(V_id number) return varchar2;
 
-end Pak_StateEmployee;
+function Last_savings_deposit(V_id number) return varchar2;
+
+function last_withdraw_checking(V_id number) return varchar2;
+
+function last_withdraw_savings(V_id number) return varchar2;
+
+end BankP;
 /
 
 ----------------------------------------------------------------
 
 create or replace package body BankP is
 
-function current_balance(V_id varchar2, v_type varchar2) return number
+function current_balance(V_id number, v_type varchar2) return number
 is
     V_total     number;
 begin
     
     if upper(v_type) = upper('credit') then
         select balance into v_total
-        from credit_account;
+        from credit_account
+        where primary = V_id;
+        return v_total;
+        
     elsif upper(v_type) = upper('deposit') then
         select balance into v_total
-        from DEPOSIT_ACCt;
+        from DEPOSIT_ACCt
+        where primary = V_id;
+        return v_total;
+        
     else
         RAISE_APPLICATION_ERROR(-20231, v_type || ' is an invalid account type');
-        return null;
-    end if;
-    
-    return v_total
-
+        return 0;
+    end if; 
 EXCEPTION
     WHEN	 VALUE_ERROR THEN					
         DBMS_OUTPUT.PUT_LINE('Error '||SQLCODE||
         SUBSTR(SQLERRM,1,80));  
+        return 0;
     WHEN ZERO_DIVIDE THEN
         DBMS_OUTPUT.PUT_LINE('Divide by zero');
+        return 0;
+    WHEN OTHERS THEN
+    IF SQL%NOTFOUND THEN
+        DBMS_OUTPUT.PUT_LINE('No such record was found');
+        return 0;
+    END IF;
+        DBMS_OUTPUT.PUT_LINE('Error '||SQLCODE || 
+        SUBSTR(SQLERRM,1,80));  
+        return 0;
+        
+end current_balance;
+
+function Last_checking_deposit(V_id number) return varchar2
+is
+
+    V_last      varchar2(1024);
+
+begin
+
+ select to_char(cat.transid) || ' ' || to_char(cat.acctno) || ' ' || cat.transtype || ' ' || to_char(cat.transdatetime) || ' ' || to_char(cat.amount) || ' ' || cat.description into V_last
+    from deposit_acct_transaction cat
+    where cat.acctno = (select acctno from credit_account where primary = V_id)
+    and cat.description like '%deposit'
+    and cat.transtype like 'Credit'
+    and rownum = 1
+    order by cat.transdatetime desc;
+    
+    if v_last is null then 
+        RAISE_APPLICATION_ERROR(-20231, V_id || ' account found associated with this customer');
+        return null;
+    end if; 
+    return V_last;
+EXCEPTION
+    WHEN VALUE_ERROR THEN					
+        DBMS_OUTPUT.PUT_LINE('Error '||SQLCODE||
+        SUBSTR(SQLERRM,1,80));  
+        return null;
+    WHEN OTHERS THEN
+    IF SQL%NOTFOUND THEN
+        DBMS_OUTPUT.PUT_LINE('No such record was found');
+        return null;
+    END IF;
+        DBMS_OUTPUT.PUT_LINE('Error '||SQLCODE || 
+        SUBSTR(SQLERRM,1,80));  
+        return null;
+end Last_checking_deposit;
+
+-----------------------------------------------------
+
+function Last_savings_deposit(V_id number) return varchar2
+is
+
+    V_last      varchar2(1024);
+
+begin
+
+ select to_char(cat.transid) || ' ' || to_char(cat.acctno) || ' ' || cat.transtype || ' ' || to_char(cat.transdatetime) || ' ' || to_char(cat.amount) || ' ' || cat.description into V_last
+    from deposit_acct_transaction cat
+    where cat.acctno = (select acctno from credit_account where primary = V_id)
+    and cat.description like '%deposit'
+    and cat.transtype like 'Debit'
+    and rownum = 1
+    order by cat.transdatetime desc;
+    
+    if v_last is null then 
+        RAISE_APPLICATION_ERROR(-20231, V_id || ' account found associated with this customer');
+        return null;
+    end if; 
+    return V_last;
+EXCEPTION
+    WHEN VALUE_ERROR THEN					
+        DBMS_OUTPUT.PUT_LINE('Error '||SQLCODE||
+        SUBSTR(SQLERRM,1,80));  
+        return null;
+    WHEN OTHERS THEN
+    IF SQL%NOTFOUND THEN
+        DBMS_OUTPUT.PUT_LINE('No such record was found');
+        return null;
+    END IF;
+        DBMS_OUTPUT.PUT_LINE('Error '||SQLCODE || 
+        SUBSTR(SQLERRM,1,80));  
+        return null;
+end Last_savings_deposit;
+
+---------------------------------------------------------
+
+function last_withdraw_checking(V_id number) return varchar2
+is
+
+    V_last      varchar2(1024);
+
+begin
+
+ select to_char(cat.transid) || ' ' || to_char(cat.acctno) || ' ' || cat.transtype || ' ' || to_char(cat.transdatetime) || ' ' || to_char(cat.amount) || ' ' || cat.description into V_last
+    from deposit_acct_transaction cat
+    where cat.acctno = (select acctno from credit_account where primary = V_id)
+    and cat.description like '%withdrawal'
+    and cat.transtype like 'Credit'
+    and rownum = 1
+    order by cat.transdatetime desc;
+    
+    if v_last is null then 
+        RAISE_APPLICATION_ERROR(-20231, V_id || ' account found associated with this customer');
+        return null;
+    end if; 
+    return V_last;
+EXCEPTION
+    WHEN VALUE_ERROR THEN					
+        DBMS_OUTPUT.PUT_LINE('Error '||SQLCODE||
+        SUBSTR(SQLERRM,1,80));  
+        return null;
+    WHEN OTHERS THEN
+    IF SQL%NOTFOUND THEN
+        DBMS_OUTPUT.PUT_LINE('No such record was found');
+        return null;
+    END IF;
+        DBMS_OUTPUT.PUT_LINE('Error '||SQLCODE || 
+        SUBSTR(SQLERRM,1,80));  
+        return null;
+end last_withdraw_checking;
+
+---------------------------------------------------------
+
+function last_withdraw_savings(V_id number) return varchar2
+is
+
+    V_last      varchar2(1024);
+
+begin
+
+ select to_char(cat.transid) || ' ' || to_char(cat.acctno) || ' ' || cat.transtype || ' ' || to_char(cat.transdatetime) || ' ' || to_char(cat.amount) || ' ' || cat.description into V_last
+    from deposit_acct_transaction cat
+    where cat.acctno = (select acctno from credit_account where primary = V_id)
+    and cat.description like '%withdrawal'
+    and cat.transtype like 'Debit'
+    and rownum = 1
+    order by cat.transdatetime desc;
+    
+    if v_last is null then 
+        RAISE_APPLICATION_ERROR(-20231, V_id || ' account found associated with this customer');
+        return null;
+    end if; 
+    return V_last;
+EXCEPTION
+    WHEN VALUE_ERROR THEN					
+        DBMS_OUTPUT.PUT_LINE('Error '||SQLCODE||
+        SUBSTR(SQLERRM,1,80));  
+        return null;
+    WHEN OTHERS THEN
+    IF SQL%NOTFOUND THEN
+        DBMS_OUTPUT.PUT_LINE('No such record was found');
+        return null;
+    END IF;
+        DBMS_OUTPUT.PUT_LINE('Error '||SQLCODE || 
+        SUBSTR(SQLERRM,1,80));  
+        return null;
+end last_withdraw_savings;
+
+
+end BankP;
+/
+
+select BankP.current_balance(9900000001, 'CREDIT') from dual;
+select BankP.Last_checking_deposit(9900000001) from dual;
+select BankP.Last_savings_deposit(9900000002) from dual;
+select BankP.last_withdraw_checking(9900000001) from dual;
+select BankP.last_withdraw_savings(9900000001) from dual;
+
+
+/*---------------------------------------------------
+************* chapter 4.B *****************************
+---------------------------------------------------*/
+
+create or replace package BranchP is
+
+function branch_address(V_Bid number) return varchar2;
+function branch_phone(V_Bid number) return number;
+procedure branch_employees(V_Bid number);
+
+end BranchP ;
+/
+
+---------------------------------------
+
+create or replace package body BranchP is
+
+function branch_address(V_Bid number) return varchar2
+as
+    v_address   varchar2(512);
+begin
+    select br.B_st || ', ' || br.B_city || ', ' || br.B_state || ' ' || br.B_zip into v_address
+    from branch br
+    where br.branchid = v_bid;
+    
+    if v_address is null then 
+        RAISE_APPLICATION_ERROR(-20231, V_Bid || ' no branch found associated with this number');
+        return null;
+    end if; 
+    return v_address;
+EXCEPTION
+    WHEN VALUE_ERROR THEN					
+        DBMS_OUTPUT.PUT_LINE('Error '||SQLCODE||
+        SUBSTR(SQLERRM,1,80));  
+        return null;
+    WHEN OTHERS THEN
+    IF SQL%NOTFOUND THEN
+        DBMS_OUTPUT.PUT_LINE('No such record was found');
+        return null;
+    END IF;
+        DBMS_OUTPUT.PUT_LINE('Error '||SQLCODE || 
+        SUBSTR(SQLERRM,1,80));  
+        return null;
+end branch_address;
+
+function branch_phone(V_Bid number) return number
+as
+    v_phone   varchar2(512);
+begin
+    select br.branchphone into v_phone
+    from branch br
+    where br.branchid = v_bid;
+    
+    if v_phone is null then 
+        RAISE_APPLICATION_ERROR(-20231, V_Bid || ' no branch found associated with this number');
+        return 0;
+    end if; 
+    return v_phone;
+EXCEPTION
+    WHEN VALUE_ERROR THEN					
+        DBMS_OUTPUT.PUT_LINE('Error '||SQLCODE||
+        SUBSTR(SQLERRM,1,80));  
+        return 0;
+    WHEN OTHERS THEN
+    IF SQL%NOTFOUND THEN
+        DBMS_OUTPUT.PUT_LINE('No such record was found');
+        return 0;
+    END IF;
+        DBMS_OUTPUT.PUT_LINE('Error '||SQLCODE || 
+        SUBSTR(SQLERRM,1,80));  
+        return 0;
+end branch_phone;
+
+procedure branch_employees(V_Bid in number)
+is
+    v_name      varchar2(512);
+    
+    cursor C_banchemp is
+    select be.fname || ' ' || be.mname || ' ' || be.lname
+    from bank_employee be
+    left join branch_employee bem
+    on be.empid = bem.empid
+    where be.empid = bem.empid
+    and bem.branchid = v_bid;
+    
+begin
+      Open C_banchemp;
+
+        LOOP 
+        
+            FETCH C_banchemp 
+            INTO V_name;
+            EXIT WHEN C_banchemp%NOTFOUND;
+            DBMS_OUTPUT.PUT_LINE(V_name); 
+        end loop;
+        
+    close C_banchemp;
+EXCEPTION
+    WHEN VALUE_ERROR THEN					
+        DBMS_OUTPUT.PUT_LINE('Error '||SQLCODE||
+        SUBSTR(SQLERRM,1,80));  
     WHEN OTHERS THEN
     IF SQL%NOTFOUND THEN
         DBMS_OUTPUT.PUT_LINE('No such record was found');
     END IF;
         DBMS_OUTPUT.PUT_LINE('Error '||SQLCODE || 
         SUBSTR(SQLERRM,1,80));  
-end current_balance;
+end branch_employees;
 
-function Last_checking_deposit(V_acct_num char) return deposit_acct_transaction%rowtype
-is
-
-    V_last      deposit_acct_transaction%rowtype;
-
-begin
-
-
-end Last_checking_deposit;
-
-end BankP;
+end BranchP;
 /
+
+select BranchP.branch_address(1004) from dual;
+select BranchP.branch_phone(1003) from dual;
+exec BranchP.branch_employees(1001);
+
+/*---------------------------------------------------
+************* chapter 4.C *****************************
+---------------------------------------------------*/
+create or replace package Insert_pkg  is
+    procedure P_insert_customer(
+        V_ssn    in   char,
+        v_fname  in   varchar2,
+        v_mname  in   varchar2,
+        v_lname  in   varchar2,
+        v_dob    in   date,
+        v_street in   varchar2,
+        v_city   in   varchar2,
+        v_state  in   varchar2,
+        v_zip    in   number,
+        v_homePhone in char,
+        v_workPhone in char,
+        v_atmno  in   char,
+        V_atmpw  in   varchar2,
+        v_web    in   varchar2,
+        v_webp   in   varchar2,
+        v_email  in   varchar2
+    );
+        
+    procedure P_insert_employee(
+        V_ssn    in   char,
+        v_fname  in   varchar2,
+        v_mname  in   varchar2,
+        v_lname  in   varchar2,
+        v_street in   varchar2,
+        v_city   in   varchar2,
+        v_state  in   varchar2,
+        v_zip    in   number,
+        v_homePhone in char,
+        v_email  in   varchar2,
+        V_gender in   char,
+        v_race   in   char,
+        v_dob   in    date,
+        v_spouse in   varchar2,
+        v_spouselname in varchar2,
+        V_degree    in  varchar2,
+        v_degreedate in date,
+        v_hiredate  in date,
+         v_job     in varchar2,
+        v_number in number       
+        );
+        
+        procedure insert_into_cd(
+            v_no        in  char,
+            V_prodid    in  varchar2,
+            V_prime     in  number,
+            V_co        in  number,
+            V_amount    in  number
+        );
+        
+        PROCEDURE INSERT_DRIVER(
+            v_ID    IN  NUMBER,
+            V_LNO   IN VARCHAR2,
+            V_STATE IN CHAR,
+            V_EXP   IN DATE
+        );
+        
+        procedure delete_driver(
+            v_id    in  number
+        );
+            
+end Insert_pkg ;
+/
+-------------------------------------------------------
+create or replace package body Insert_pkg  is
+
+    procedure P_insert_customer(
+        V_ssn    in   char,
+        v_fname  in   varchar2,
+        v_mname  in   varchar2,
+        v_lname  in   varchar2,
+        v_dob    in   date,
+        v_street in   varchar2,
+        v_city   in   varchar2,
+        v_state  in   varchar2,
+        v_zip    in   number,
+        v_homePhone in char,
+        v_workPhone in char,
+        v_atmno  in   char,
+        V_atmpw  in   varchar2,
+        v_web    in   varchar2,
+        v_webp   in   varchar2,
+        v_email  in   varchar2
+    )
+    is
+begin
+        
+        insert into bank_customer
+        values(
+        ID_generator.nextval,
+        V_ssn,
+        v_fname,
+        v_mname,
+        v_lname,
+        v_dob,
+        v_street,
+        v_city,
+        v_state,
+        v_zip,
+        v_homePhone,
+        v_workPhone,
+        v_atmno,
+        V_atmpw,
+        v_web,
+        v_webp,
+        v_email);
+        
+        exception
+         when dup_val_on_index then
+          dbms_output.put_line('duplicate values cannot be insert:' || sqlerrm);
+    end P_insert_customer;
+-----------------------------------------------------------  
+     procedure P_insert_employee(
+        V_ssn    in   char,
+        v_fname  in   varchar2,
+        v_mname  in   varchar2,
+        v_lname  in   varchar2,
+        v_street in   varchar2,
+        v_city   in   varchar2,
+        v_state  in   varchar2,
+        v_zip    in   number,
+        v_homePhone in char,
+        v_email  in   varchar2,
+        V_gender in   char,
+        v_race   in   char,
+        v_dob   in    date,
+        v_spouse in   varchar2,
+        v_spouselname in varchar2,
+        V_degree    in  varchar2,
+        v_degreedate in date,
+        v_hiredate  in date,
+        v_job     in varchar2,
+        v_number  in number      
+        )
+        is
+    begin
+    
+    insert into bank_employee
+        values(
+        ID_generator.nextval,
+        V_ssn,
+        v_fname,
+        v_mname,
+        v_lname,
+        v_street,
+        v_city,
+        v_state,
+        v_zip,
+        v_homePhone,
+        v_email,
+        V_gender,
+        v_race,
+        v_dob,
+        v_spouse,
+        v_spouselname,
+        V_degree,
+        v_degreedate,
+        v_hiredate,
+        v_job,
+        v_number        
+        );
+        exception
+        when dup_val_on_index then
+          dbms_output.put_line('duplicate values cannot be insert:');
+    end P_insert_employee;
+ -------------------------------------------------------   
+    procedure insert_into_cd(
+            v_no        in  char,
+            V_prodid    in  varchar2,
+            V_prime     in  number,
+            V_co        in  number,
+            V_amount    in  number
+        )
+    is
+    v_min   number;    
+    begin
+    
+    select mincdamt into v_min
+    from cd_product
+    where cdprodid = v_prodid;
+    
+    if v_amount < v_min then
+        RAISE_APPLICATION_ERROR(-20035, 'CD TYPE: ' || v_prodid || ' HAS A MINIMUM OF ' || V_MIN);
+    ELSE
+        INSERT INTO CD_ACCOUNT
+        VALUES(
+            V_NO,
+            V_prodid,
+            SYSDATE,
+            V_PRIME,
+            V_CO,
+            v_AMOUNT);
+    END IF;
+    exception
+        when dup_val_on_index then
+          dbms_output.put_line('duplicate values cannot be insert:');
+          
+    end insert_into_cd;
+---------------------------------------------------------
+  PROCEDURE INSERT_DRIVER(
+            v_ID    IN  NUMBER,
+            V_LNO   IN VARCHAR2,
+            V_STATE IN CHAR,
+            V_EXP   IN DATE
+        )
+  IS
+    V_EMP       NUMBER;
+  BEGIN
+v
+        INSERT INTO driver
+        VALUES(
+            V_ID,
+            V_LNO,
+            v_STATE,
+            V_EXP);
+    ELSE 
+        RAISE_APPLICATION_ERROR(-20535, 'NO EMPLOYEE FOUND WITH ID: ' || v_ID);
+    END IF;
+    exception
+        when dup_val_on_index then
+          dbms_output.put_line('duplicate values cannot be insert:');
+  end INSERT_DRIVER;
+---------------------------------------------------
+    procedure delete_driver(
+            v_id    in  number
+        )
+    is
+    v_emp   number;
+    begin
+      SELECT EMPID INTO V_EMP
+      FROM driver
+      WHERE empid = v_ID;
+    IF V_EMP IS NOT NULL THEN
+        delete from driver
+        where empid=v_id;
+    else
+        RAISE_APPLICATION_ERROR(-20535, 'NO EMPLOYEE FOUND WITH ID: ' || v_ID);
+    end if;
+    EXCEPTION 
+   WHEN ZERO_DIVIDE THEN  
+      dbms_output.put_line('MATHMATICAL ERROR');
+
+   WHEN OTHERS THEN  
+      dbms_output.put_line('Some other kind of error occurred when deleting');
+
+end Insert_pkg ;
+/
+
+set serveroutput on;
+
+exec Insert_pkg.P_insert_customer(008293564,'Jorge','Xi','Usman', to_date('06-20-1969','mm-dd-yyyy'), '55 Copley', 'Boston', 'MA', 02129, 6034344444, 6173380932, 2003456781, 'vdamn)*(', '(1i2.,#^&', 'Pkwvin201', 'GWag@swag.biz');
+exec Insert_pkg.P_insert_employee(003001234,'chuck','theiceman','liddel','venturas ave','Las Vegas','nv','67238',9876451726,'ice@gmail.com','m','w',to_date('06-20-1969','mm-dd-yyyy'),'susan','liddel','bach',to_date('06-20-1989','mm-dd-yyyy'),to_date('06-20-1999','mm-dd-yyyy'),'security',1000000002);
+EXEC Insert_pkg.insert_into_cd('CCD0000004', 'CD3', '9900000003', '9900000001',4500);
+EXEC Insert_pkg.INSERT_DRIVER(1000000009, 'NH41LN021', 'NH', '04-APR-22');
 
 /*****************************************************************/
 
@@ -974,6 +1507,7 @@ select * from deposit_acct_transaction cp;
 
     select * from cd_account;
     select * from cd_product;
+    select * from driver;
     
     select * from loan;
     select * from loan_product;
@@ -981,8 +1515,8 @@ select * from deposit_acct_transaction cp;
     select * from bank_employee;
     select * from branch_employee;
     select * from CREDIT_ACCT_TRAnSACTION;
-    select * from DEPOSIT_ACCt; 
     select * from DEPOSIT_ACCT_TRANSACTION;
+    select * from DEPOSIT_ACCt; 
     select * from credit_account;
     select * from DEPOSIT_ACCt_PRODUCT;
     select * from credit_account;
