@@ -1659,7 +1659,24 @@ CREATE OR REPLACE TRIGGER removed_employee
 	after DELETE ON bank_employee
     for each row
 DECLARE
+    V_TNAME         VARCHAR2(128);
+    V_TTYPE         VARCHAR2(128);
+    V_TEVENT        VARCHAR2(128);
+    V_TBNAME        VARCHAR2(128);
 BEGIN
+    SELECT
+    TRIGGER_NAME,
+    TRIGGER_TYPE,
+    TRIGGERING_EVENT,
+    TABLE_NAME
+    INTO 
+    V_TNAME,
+    V_TTYPE,
+    V_TEVENT,
+    V_TBNAME
+    FROM USER_TRIGGERS
+    WHERE TRIGGER_NAME = UPPER('removed_employee');
+    
     insert into Employee_History_file
     values(
         :old.empid,
@@ -1683,6 +1700,28 @@ BEGIN
         :old.hiredate,
         :old.jobtitle,
         :old.staffmanager);
+    EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        DBMS_OUTPUT.PUT_LINE('NO EMPLOYEE FOUND');
+        INSERT INTO Error_log
+        values(
+                V_TNAME,
+                V_TTYPE,
+                SYSDATE,
+                V_TEVENT,
+                V_TBNAME
+            );
+    IF SQL%NOTFOUND THEN
+        DBMS_OUTPUT.PUT_LINE('no record found for ');
+        INSERT INTO Error_log
+        values(
+                V_TNAME,
+                V_TTYPE,
+                SYSDATE,
+                V_TEVENT,
+                V_TBNAME
+            );
+    end if;
 end;
 /
 
@@ -1695,8 +1734,41 @@ select * from Employee_History_file;
 CREATE OR REPLACE TRIGGER mod_loan
 	AFTER DELETE or insert or update ON loan
     for each row
+declare
+    v_Cust      number;
+    V_TNAME         VARCHAR2(128);
+    V_TTYPE         VARCHAR2(128);
+    V_TEVENT        VARCHAR2(128);
+    V_TBNAME        VARCHAR2(128);
 BEGIN
+    SELECT
+    TRIGGER_NAME,
+    TRIGGER_TYPE,
+    TRIGGERING_EVENT,
+    TABLE_NAME
+    INTO 
+    V_TNAME,
+    V_TTYPE,
+    V_TEVENT,
+    V_TBNAME
+    FROM USER_TRIGGERS
+    WHERE TRIGGER_NAME = UPPER('mod_loan');
+    
    if inserting then
+    select custid into v_cust
+    from bank_customer
+    where custid = :new.primary;   
+    if v_cust is null then
+            RAISE_APPLICATION_ERROR(-20233, 'cannot find customer with primary ' || :new.primary);
+            insert into Error_log
+            values(
+                V_TNAME,
+                V_TTYPE,
+                SYSDATE,
+                V_TEVENT,
+                V_TBNAME
+            );
+    else
         insert into customer_mod_log
         values(
             (select fname || ' ' || mname || ' ' || lname
@@ -1705,7 +1777,22 @@ BEGIN
             sysdate,
             'INSERT LOAN loanno:'|| :new.loanno || ' loanprodid:' || :new.loanprodid|| ' amtborrowed:' ||  to_char(:new.amtborrowed) || ' primary:' ||  to_char(:new.primary) || ' coowner:' ||  to_char(:new.coowner) || ' dateissued:' || to_char(:new.dateissued, 'dd-mon-yy') || ' minmopay:' || to_char(:new.minmopay) || ' mopaydueday:' || to_char(:new.mopaydueday)
         );
+        end if;
     elsif deleting then
+    select custid into v_cust
+    from bank_customer
+    where custid = :old.primary;   
+    if v_cust is null then
+            RAISE_APPLICATION_ERROR(-20233, 'cannot find customer with primary ' || :old.primary);
+            insert into Error_log
+            values(
+                V_TNAME,
+                V_TTYPE,
+                SYSDATE,
+                V_TEVENT,
+                V_TBNAME
+            );
+    else
         insert into customer_mod_log
         values(
             (select fname || ' ' || mname || ' ' || lname
@@ -1714,6 +1801,21 @@ BEGIN
             sysdate,
             'DELETE LOAN loanno:'||:old.loanno || ' loanprodid:' || :old.loanprodid|| ' amtborrowedl:' ||  to_char(:old.amtborrowed) || ' primary:' ||  to_char(:old.primary) || ' coowner:' ||  to_char(:old.coowner) || ' dateissued:' || to_char(:old.dateissued, 'dd-mon-yy') || ' minmopay:' || to_char(:old.minmopay) || ' mopaydueday:' || to_char(:old.mopaydueday)
         );
+        end if;
+    else
+    select custid into v_cust
+    from bank_customer
+    where custid = :new.primary;   
+    if v_cust is null then
+            RAISE_APPLICATION_ERROR(-20233, 'cannot find customer with primary ' || :new.primary);
+            insert into Error_log
+            values(
+                V_TNAME,
+                V_TTYPE,
+                SYSDATE,
+                V_TEVENT,
+                V_TBNAME
+            );
     else
         insert into customer_mod_log
         values(
@@ -1723,6 +1825,29 @@ BEGIN
             sysdate,
             'UPDATE OLD LOAN '||:old.loanno || ' ' || :old.loanprodid|| ' ' ||  to_char(:old.amtborrowed) || ' ' ||  to_char(:old.primary) || ' ' ||  to_char(:old.coowner) || ' ' || to_char(:old.dateissued, 'dd-mon-yy') || ' ' || to_char(:old.minmopay) || ' ' || to_char(:old.mopaydueday)||' UPDATE NEW LOAN loanno:'|| :new.loanno || ' loanprodid:' || :new.loanprodid|| ' amtborrowed:' ||  to_char(:new.amtborrowed) || ' primary:' ||  to_char(:new.primary) || ' coowner:' ||  to_char(:new.coowner) || ' dateissued:' || to_char(:new.dateissued, 'dd-mon-yy') || ' minmopay:' || to_char(:new.minmopay) || ' mopaydueday:' || to_char(:new.mopaydueday)
         );
+        end if;
+    end if;
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        DBMS_OUTPUT.PUT_LINE('NO TRANSACTIONS FOUND');
+        INSERT INTO Error_log
+        values(
+                V_TNAME,
+                V_TTYPE,
+                SYSDATE,
+                V_TEVENT,
+                V_TBNAME
+            );
+    IF SQL%NOTFOUND THEN
+        DBMS_OUTPUT.PUT_LINE('no record found for ');
+        INSERT INTO Error_log
+        values(
+                V_TNAME,
+                V_TTYPE,
+                SYSDATE,
+                V_TEVENT,
+                V_TBNAME
+            );
     end if;
 end;
 /
@@ -1731,8 +1856,41 @@ end;
 CREATE OR REPLACE TRIGGER mod_deposit
 	after DELETE or insert or update ON deposit_acct
     for each row
+declare
+    v_cust      number;
+    V_TNAME         VARCHAR2(128);
+    V_TTYPE         VARCHAR2(128);
+    V_TEVENT        VARCHAR2(128);
+    V_TBNAME        VARCHAR2(128);
 BEGIN
+    SELECT
+    TRIGGER_NAME,
+    TRIGGER_TYPE,
+    TRIGGERING_EVENT,
+    TABLE_NAME
+    INTO 
+    V_TNAME,
+    V_TTYPE,
+    V_TEVENT,
+    V_TBNAME
+    FROM USER_TRIGGERS
+    WHERE TRIGGER_NAME = UPPER('mod_deposit');
+    
    if inserting then
+    select custid into v_cust
+    from bank_customer
+    where custid = :new.primary;   
+    if v_cust is null then
+            RAISE_APPLICATION_ERROR(-20233, 'cannot find customer with primary ' || :new.primary);
+            insert into Error_log
+            values(
+                V_TNAME,
+                V_TTYPE,
+                SYSDATE,
+                V_TEVENT,
+                V_TBNAME
+            );
+    else
         insert into customer_mod_log
         values(
             (select fname || ' ' || mname || ' ' || lname
@@ -1741,7 +1899,22 @@ BEGIN
             sysdate,
             'INSERT DEPOSIT | ACCTNO:'|| :new.ACCTNO || ' | ACCTPRODID:' || :new.ACCTPRODID|| ' | DATEOPENED:' || TO_CHAR(:NEW.DATEOPENED, 'DD-MON-YY') || ' | INITDEPOSIT:' || TO_CHAR(:NEW.INITDEPOSIT) || ' | PRIMARY:' || TO_CHAR(:NEW.PRIMARY) || ' | COOWNER:' || TO_CHAR(:NEW.COOWNER) || ' | BALANCE:' || TO_CHAR(:NEW.BALANCE)
             );
+            end if;
     elsif deleting then
+    select custid into v_cust
+    from bank_customer
+    where custid = :old.primary;   
+        if v_cust is null then
+            RAISE_APPLICATION_ERROR(-20233, 'cannot find customer with primary ' || :old.primary);
+            insert into Error_log
+            values(
+                V_TNAME,
+                V_TTYPE,
+                SYSDATE,
+                V_TEVENT,
+                V_TBNAME
+            );
+        else
         insert into customer_mod_log
         values(
             (select fname || ' ' || mname || ' ' || lname
@@ -1750,7 +1923,22 @@ BEGIN
             sysdate,
             'DELETE DEPOSIT | ACCTNO:'|| :OLD.ACCTNO || ' | ACCTPRODID:' || :OLD.ACCTPRODID|| ' | DATEOPENED:' || TO_CHAR(:OLD.DATEOPENED, 'DD-MON-YY') || ' | INITDEPOSIT:' || TO_CHAR(:OLD.INITDEPOSIT) || ' | PRIMARY:' || TO_CHAR(:OLD.PRIMARY) || ' | COOWNER:' || TO_CHAR(:OLD.COOWNER) || ' | BALANCE:' || TO_CHAR(:OLD.BALANCE)
         );
+        end if;
     else
+        select custid into v_cust
+        from bank_customer
+        where custid = :new.primary;   
+        if v_cust is null then
+            RAISE_APPLICATION_ERROR(-20233, 'cannot find customer with primary ' || :new.primary);
+            insert into Error_log
+            values(
+                V_TNAME,
+                V_TTYPE,
+                SYSDATE,
+                V_TEVENT,
+                V_TBNAME
+            );
+        else
         insert into customer_mod_log
         values(
             (select fname || ' ' || mname || ' ' || lname
@@ -1759,6 +1947,29 @@ BEGIN
             sysdate,
             'UPDATE OLD DEPOSIT | ACCTNO:'|| :new.ACCTNO || ' | ACCTPRODID:' || :new.ACCTPRODID|| ' | DATEOPENED:' || TO_CHAR(:NEW.DATEOPENED, 'DD-MON-YY') || ' | INITDEPOSIT:' || TO_CHAR(:NEW.INITDEPOSIT) || ' | PRIMARY:' || TO_CHAR(:NEW.PRIMARY) || ' | COOWNER:' || TO_CHAR(:NEW.COOWNER) || ' | BALANCE:' || TO_CHAR(:NEW.BALANCE)|| ' UPDATE NEW | ACCTNO:'|| :OLD.ACCTNO || ' | ACCTPRODID:' || :OLD.ACCTPRODID|| ' | DATEOPENED:' || TO_CHAR(:OLD.DATEOPENED, 'DD-MON-YY') || ' | INITDEPOSIT:' || TO_CHAR(:OLD.INITDEPOSIT) || ' | PRIMARY:' || TO_CHAR(:OLD.PRIMARY) || ' | COOWNER:' || TO_CHAR(:OLD.COOWNER) || ' | BALANCE:' || TO_CHAR(:OLD.BALANCE)
         );
+        end if;
+    end if;
+    EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        DBMS_OUTPUT.PUT_LINE('NO TRANSACTIONS FOUND');
+        INSERT INTO Error_log
+        values(
+                V_TNAME,
+                V_TTYPE,
+                SYSDATE,
+                V_TEVENT,
+                V_TBNAME
+            );
+    IF SQL%NOTFOUND THEN
+        DBMS_OUTPUT.PUT_LINE('no record found for ');
+        INSERT INTO Error_log
+        values(
+                V_TNAME,
+                V_TTYPE,
+                SYSDATE,
+                V_TEVENT,
+                V_TBNAME
+            );
     end if;
 end;
 /
@@ -1767,9 +1978,41 @@ end;
 CREATE OR REPLACE TRIGGER mod_cd
 	after DELETE or insert or update ON cd_account
     for each row
-
+declare
+    v_cust  number;
+    V_TNAME         VARCHAR2(128);
+    V_TTYPE         VARCHAR2(128);
+    V_TEVENT        VARCHAR2(128);
+    V_TBNAME        VARCHAR2(128);
 BEGIN
+    SELECT
+    TRIGGER_NAME,
+    TRIGGER_TYPE,
+    TRIGGERING_EVENT,
+    TABLE_NAME
+    INTO 
+    V_TNAME,
+    V_TTYPE,
+    V_TEVENT,
+    V_TBNAME
+    FROM USER_TRIGGERS
+    WHERE TRIGGER_NAME = UPPER('mod_cd');
+    
    if inserting then
+    select custid into v_cust
+    from bank_customer
+    where custid = :new.primary;   
+    if v_cust is null then
+            RAISE_APPLICATION_ERROR(-20233, 'cannot find customer with primary ' || :new.primary);
+            insert into Error_log
+            values(
+                V_TNAME,
+                V_TTYPE,
+                SYSDATE,
+                V_TEVENT,
+                V_TBNAME
+            );
+    else
         insert into customer_mod_log
         values(
             (select fname || ' ' || mname || ' ' || lname
@@ -1778,7 +2021,22 @@ BEGIN
             sysdate,
             'INSERT CD | CDNO:'|| :new.CDNO || ' | CDPRODID:' || :new.CDPRODID|| ' | DATEOPENED:' || TO_CHAR(:NEW.DATEOPENED, 'DD-MON-YY') || ' | PRIMARY:' || TO_CHAR(:NEW.PRIMARY) || ' | COOWNER:' || TO_CHAR(:NEW.COOWNER) || ' | CDAMT:' || TO_CHAR(:NEW.CDAMT)
             );
+            end if;
     elsif deleting then
+    select custid into v_cust
+    from bank_customer
+    where custid = :old.primary;   
+    if v_cust is null then
+            RAISE_APPLICATION_ERROR(-20233, 'cannot find customer with primary ' || :old.primary);
+            insert into Error_log
+            values(
+                V_TNAME,
+                V_TTYPE,
+                SYSDATE,
+                V_TEVENT,
+                V_TBNAME
+            );
+    else
         insert into customer_mod_log
         values(
             (select fname || ' ' || mname || ' ' || lname
@@ -1787,7 +2045,22 @@ BEGIN
             sysdate,
             'DELETE CD | CDNO:'|| :OLD.CDNO || ' | CDPRODID:' || :OLD.CDPRODID|| ' | DATEOPENED:' || TO_CHAR(:OLD.DATEOPENED, 'DD-MON-YY') || ' | PRIMARY:' || TO_CHAR(:OLD.PRIMARY) || ' | COOWNER:' || TO_CHAR(:OLD.COOWNER) || ' | CDAMT:' || TO_CHAR(:OLD.CDAMT)
         );
+        end if;
     else
+     select custid into v_cust
+    from bank_customer
+    where custid = :new.primary;   
+    if v_cust is null then
+            RAISE_APPLICATION_ERROR(-20233, 'cannot find customer with primary ' || :new.primary);
+            insert into Error_log
+            values(
+                V_TNAME,
+                V_TTYPE,
+                SYSDATE,
+                V_TEVENT,
+                V_TBNAME
+            );
+        else
         insert into customer_mod_log
         values(
             (select fname || ' ' || mname || ' ' || lname
@@ -1796,6 +2069,29 @@ BEGIN
             sysdate,
             'UPDATE OLD CD | CDNO:'|| :new.CDNO || ' | CDPRODID:' || :new.CDPRODID|| ' | DATEOPENED:' || TO_CHAR(:NEW.DATEOPENED, 'DD-MON-YY') || ' | PRIMARY:' || TO_CHAR(:NEW.PRIMARY) || ' | COOWNER:' || TO_CHAR(:NEW.COOWNER) || ' | CDAMT:' || TO_CHAR(:NEW.CDAMT) || ' UPDATE NEW | CDNO:'|| :OLD.CDNO || ' | CDPRODID:' || :OLD.CDPRODID|| ' | DATEOPENED:' || TO_CHAR(:OLD.DATEOPENED, 'DD-MON-YY') || ' | PRIMARY:' || TO_CHAR(:OLD.PRIMARY) || ' | COOWNER:' || TO_CHAR(:OLD.COOWNER) || ' | CDAMT:' || TO_CHAR(:OLD.CDAMT)
         );
+        end if;
+    end if;
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        DBMS_OUTPUT.PUT_LINE('NO TRANSACTIONS FOUND');
+        INSERT INTO Error_log
+        values(
+                V_TNAME,
+                V_TTYPE,
+                SYSDATE,
+                V_TEVENT,
+                V_TBNAME
+            );
+    IF SQL%NOTFOUND THEN
+        DBMS_OUTPUT.PUT_LINE('no record found for ');
+        INSERT INTO Error_log
+        values(
+                V_TNAME,
+                V_TTYPE,
+                SYSDATE,
+                V_TEVENT,
+                V_TBNAME
+            );
     end if;
 end;
 /
@@ -1804,8 +2100,40 @@ end;
 CREATE OR REPLACE TRIGGER mod_credit
 	after DELETE or insert or update ON credit_account
     for each row
+declare
+    v_cust      number;
+    V_TNAME         VARCHAR2(128);
+    V_TTYPE         VARCHAR2(128);
+    V_TEVENT        VARCHAR2(128);
+    V_TBNAME        VARCHAR2(128);
 BEGIN
+    SELECT
+    TRIGGER_NAME,
+    TRIGGER_TYPE,
+    TRIGGERING_EVENT,
+    TABLE_NAME
+    INTO 
+    V_TNAME,
+    V_TTYPE,
+    V_TEVENT,
+    V_TBNAME
+    FROM USER_TRIGGERS
+    WHERE TRIGGER_NAME = UPPER('mod_credit');
    if inserting then
+    select custid into v_cust
+    from bank_customer
+    where custid = :new.primary;   
+    if v_cust is null then
+            RAISE_APPLICATION_ERROR(-20233, 'cannot find customer with primary ' || :new.primary);
+            insert into Error_log
+            values(
+                V_TNAME,
+                V_TTYPE,
+                SYSDATE,
+                V_TEVENT,
+                V_TBNAME
+            );
+    else
         insert into customer_mod_log
         values(
             (select fname || ' ' || mname || ' ' || lname
@@ -1814,7 +2142,22 @@ BEGIN
             sysdate,
             'INSERT CREDIT | CREDITACCTNO:'|| :new.CREDITACCTNO || ' | CREDITPRODID:' || :new.CREDITPRODID|| ' | DATEOPENED:' || TO_CHAR(:NEW.DATEOPENED, 'DD-MON-YY') || ' | PRIMARY:' || TO_CHAR(:NEW.PRIMARY) || ' | COOWNER:' || TO_CHAR(:NEW.COOWNER) || ' | BALANCE:' || TO_CHAR(:NEW.BALANCE) || ' | CURRENTLIMMIT:' || TO_CHAR(:NEW.CURRENTLIMMIT)||' | MOPAYDUEDAY:' || TO_CHAR(:NEW.MOPAYDUEDAY)
             );
+        end if;
     elsif deleting then
+        select custid into v_cust
+        from bank_customer
+        where custid = :old.primary;   
+        if v_cust is null then
+                RAISE_APPLICATION_ERROR(-20233, 'cannot find customer with primary ' || :old.primary);
+                insert into Error_log
+                values(
+                    V_TNAME,
+                    V_TTYPE,
+                    SYSDATE,
+                    V_TEVENT,
+                    V_TBNAME
+                );
+    else    
         insert into customer_mod_log
         values(
             (select fname || ' ' || mname || ' ' || lname
@@ -1823,6 +2166,21 @@ BEGIN
             sysdate,
             'DELETE CREDIT | CREDITACCTNO:'|| :OLD.CREDITACCTNO || ' | CREDITPRODID:' || :OLD.CREDITPRODID|| ' | DATEOPENED:' || TO_CHAR(:OLD.DATEOPENED, 'DD-MON-YY') || ' | PRIMARY:' || TO_CHAR(:OLD.PRIMARY) || ' | COOWNER:' || TO_CHAR(:OLD.COOWNER) || ' | BALANCE:' || TO_CHAR(:OLD.BALANCE) || ' | CURRENTLIMMIT:' || TO_CHAR(:OLD.CURRENTLIMMIT)||' | MOPAYDUEDAY:' || TO_CHAR(:OLD.MOPAYDUEDAY)
         );
+        end if;
+    else
+    select custid into v_cust
+    from bank_customer
+    where custid = :new.primary;   
+    if v_cust is null then
+            RAISE_APPLICATION_ERROR(-20233, 'cannot find customer with primary ' || :new.primary);
+            insert into Error_log
+            values(
+                V_TNAME,
+                V_TTYPE,
+                SYSDATE,
+                V_TEVENT,
+                V_TBNAME
+            );
     else
         insert into customer_mod_log
         values(
@@ -1832,6 +2190,29 @@ BEGIN
             sysdate,
             'UPDATE OLD CREDIT | CREDITACCTNO:'|| :new.CREDITACCTNO || ' | CREDITPRODID:' || :new.CREDITPRODID|| ' | DATEOPENED:' || TO_CHAR(:NEW.DATEOPENED, 'DD-MON-YY') || ' | PRIMARY:' || TO_CHAR(:NEW.PRIMARY) || ' | COOWNER:' || TO_CHAR(:NEW.COOWNER) || ' | BALANCE:' || TO_CHAR(:NEW.BALANCE) || ' | CURRENTLIMMIT:' || TO_CHAR(:NEW.CURRENTLIMMIT)||' | MOPAYDUEDAY:' || TO_CHAR(:NEW.MOPAYDUEDAY) || ' UPDATE NEW | CREDITACCTNO:'|| :OLD.CREDITACCTNO || ' | CREDITPRODID:' || :OLD.CREDITPRODID|| ' | DATEOPENED:' || TO_CHAR(:OLD.DATEOPENED, 'DD-MON-YY') || ' | PRIMARY:' || TO_CHAR(:OLD.PRIMARY) || ' | COOWNER:' || TO_CHAR(:OLD.COOWNER) || ' | BALANCE:' || TO_CHAR(:OLD.BALANCE) || ' | CURRENTLIMMIT:' || TO_CHAR(:OLD.CURRENTLIMMIT)||' | MOPAYDUEDATE:' || TO_CHAR(:OLD.MOPAYDUEDAY)
         );
+        end if;
+    end if;
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        DBMS_OUTPUT.PUT_LINE('NO TRANSACTIONS FOUND');
+        INSERT INTO Error_log
+        values(
+             V_TNAME,
+             V_TTYPE,
+             SYSDATE,
+             V_TEVENT,
+             V_TBNAME
+            );
+    IF SQL%NOTFOUND THEN
+        DBMS_OUTPUT.PUT_LINE('no record found for ');
+        INSERT INTO Error_log
+        values(
+                V_TNAME,
+                V_TTYPE,
+                SYSDATE,
+                V_TEVENT,
+                V_TBNAME
+            );
     end if;
 end;
 /
@@ -1887,7 +2268,35 @@ CREATE TABLE Large_Dep_Log
 CREATE OR REPLACE TRIGGER LARGE_DEPOSIT
 	after insert ON DEPOSIT_ACCT_TRANSACTION
     for each row
+DECLARE
+    V_TNAME         VARCHAR2(128);
+    V_TTYPE         VARCHAR2(128);
+    V_TEVENT        VARCHAR2(128);
+    V_TBNAME        VARCHAR2(128);
 BEGIN
+    SELECT
+    TRIGGER_NAME,
+    TRIGGER_TYPE,
+    TRIGGERING_EVENT,
+    TABLE_NAME
+    INTO 
+    V_TNAME,
+    V_TTYPE,
+    V_TEVENT,
+    V_TBNAME
+    FROM USER_TRIGGERS
+    WHERE TRIGGER_NAME = UPPER('LARGE_DEPOSIT');
+  if :new.description is null then
+            RAISE_APPLICATION_ERROR(-20241, 'transactions cannot be inserted without a description');
+            insert into Error_log
+            values(
+                V_TNAME,
+                V_TTYPE,
+                SYSDATE,
+                V_TEVENT,
+                V_TBNAME
+            );
+    end if;
     if :NEW.AMOUNT > 5000 and :new.description like '%deposit' THEN
         INSERT INTO Large_Dep_Log
         VALUES(
@@ -1900,6 +2309,29 @@ BEGIN
             :NEW.ACCESSPTID
         );
     END IF;
+    
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        DBMS_OUTPUT.PUT_LINE('NO TRANSACTIONS FOUND');
+        INSERT INTO Error_log
+        values(
+                V_TNAME,
+                V_TTYPE,
+                SYSDATE,
+                V_TEVENT,
+                V_TBNAME
+            );
+    IF SQL%NOTFOUND THEN
+        DBMS_OUTPUT.PUT_LINE('no record found for ');
+        INSERT INTO Error_log
+        values(
+                V_TNAME,
+                V_TTYPE,
+                SYSDATE,
+                V_TEVENT,
+                V_TBNAME
+            );
+    end if;
 end;
 /
 
@@ -1919,8 +2351,37 @@ CREATE TABLE Large_With_Log
 CREATE OR REPLACE TRIGGER LARGE_withdrawal
 	after insert ON DEPOSIT_ACCT_TRANSACTION
     for each row
+DECLARE
+    V_TNAME         VARCHAR2(128);
+    V_TTYPE         VARCHAR2(128);
+    V_TEVENT        VARCHAR2(128);
+    V_TBNAME        VARCHAR2(128);
 BEGIN
-    if :NEW.AMOUNT > 10000 and :new.description like '%withdrawal' THEN
+    SELECT
+    TRIGGER_NAME,
+    TRIGGER_TYPE,
+    TRIGGERING_EVENT,
+    TABLE_NAME
+    INTO 
+    V_TNAME,
+    V_TTYPE,
+    V_TEVENT,
+    V_TBNAME
+    FROM USER_TRIGGERS
+    WHERE TRIGGER_NAME = UPPER('LARGE_withdrawal');
+
+  if :new.description is null then
+            RAISE_APPLICATION_ERROR(-20241, 'transactions cannot be inserted without a description');
+            insert into Error_log
+            values(
+                V_TNAME,
+                V_TTYPE,
+                SYSDATE,
+                V_TEVENT,
+                V_TBNAME
+            );
+
+    elsif :NEW.AMOUNT > 10000 and :new.description like '%withdrawal' THEN
         INSERT INTO Large_With_Log
         VALUES(
             :NEW.TRANSID,
@@ -1932,6 +2393,29 @@ BEGIN
             :NEW.ACCESSPTID
         );
     END IF;
+       
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        DBMS_OUTPUT.PUT_LINE('NO TRANSACTIONS FOUND');
+        INSERT INTO Error_log
+        values(
+                V_TNAME,
+                V_TTYPE,
+                SYSDATE,
+                V_TEVENT,
+                V_TBNAME
+            );
+    IF SQL%NOTFOUND THEN
+        DBMS_OUTPUT.PUT_LINE('no record found for ');
+        INSERT INTO Error_log
+        values(
+                V_TNAME,
+                V_TTYPE,
+                SYSDATE,
+                V_TEVENT,
+                V_TBNAME
+            );
+    end if;
 end;
 /
 
@@ -1940,33 +2424,51 @@ VALUES(
     11, 'CCR0000004', 'Debit', current_timestamp, 10001, 'teller withdrawal', 'A000002');
     
 select * from Large_With_Log;
-delete from DEPOSIT_ACCT_TRANSACTION
-where transid = 11;
-/*****************************************************************/
 
-select * from credit_acct_transaction;
-select * from deposit_acct_transaction cp;
- select * from bank_customer;
-    select * from cd_account;
-    select * from DEPOSIT_ACCt; 
-    select * from credit_account;
-    SELECT * FROM BRANCH_MANAGER;
-    select * from bank_employee;
-    select * from loan;
-    select * from loan_product;
-    select * from EMP_ANNUAL_DATA;
-    select * from branch_employee;
-    select * from CREDIT_ACCT_TRAnSACTION;
-    select * from DEPOSIT_ACCT_TRANSACTION;
-    select * from DEPOSIT_ACCt; 
-    select * from credit_account;
-    select * from DEPOSIT_ACCt_PRODUCT;
-    select * from credit_account;
-    select * from branch;
-    select * from credit_product;
-    select * from bank_customer;
-    select * from loan_payment;
-    select * from bank_customer;
-    select * from atm;
-    select * from branch_access_points;
-    select * from DEPOSIT_ACCT_TRANSACTION;
+/*---------------------------------------------------
+************* chapter 5 *****************************
+---------------------------------------------------*/
+DROP TABLE ERROR_LOG;
+create table Error_log
+(
+    table_name      varchar2(128),
+    trigger_name    varchar2(128),
+    E_date          date,
+    trigger_event   varchar2(128),
+    trigger_type    varchar2(128)
+);
+
+SELECT * FROM USER_TRIGGERS;
+
+INSERT INTO LOAN
+VALUES('CL0000004', 'L1', '22000', 9900800004, 9900000002, TO_CHAR(SYSDATE,'DD-MON-YY'), 300, 15);
+UPDATE LOAN
+SET AMTBORROWED = 50000
+WHERE PRIMARY =9900700004;
+DELETE FROM LOAN
+WHERE PRIMARY =9900230004;
+
+INSERT INTO DEPOSIT_ACCT
+VALUES('CDEP000003', 'IntCk', TO_CHAR(SYSDATE,'DD-MON-YY'), 6000, 9900800004, 9900000003, 6000);
+UPDATE DEPOSIT_ACCT
+SET BALANCE = 1000
+WHERE PRIMARY =9900700004;
+DELETE FROM DEPOSIT_ACCT
+WHERE PRIMARY =9900230004;
+
+INSERT INTO cd_account
+VALUES('CCD0000005', 'CD1', TO_CHAR(SYSDATE,'DD-MON-YY'), 9900800004, 9900000002, 6000);
+UPDATE cd_account
+SET CDPRODID = 'CD2'
+WHERE PRIMARY =9900700004;
+DELETE FROM cd_account
+WHERE PRIMARY =9900230004;
+
+INSERT INTO CREDIT_account
+VALUES('CCR0000004', 'Annualfee', TO_CHAR(SYSDATE,'DD-MON-YY'), 9900800004, 1211, 8000, 12000, 15);
+UPDATE CREDIT_account
+SET balance = 1000
+WHERE PRIMARY =9900700004;
+DELETE FROM CREDIT_account
+WHERE PRIMARY =9900230004;
+SELECT * FROM ERROR_LOG;
